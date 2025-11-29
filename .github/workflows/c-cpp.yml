@@ -34,6 +34,7 @@ jobs:
         cmake --build . --config Release --parallel
 
     - name: Find and copy binary
+      shell: cmd
       run: |
         cd build
         if exist "bin\MinecraftUpdater.exe" (
