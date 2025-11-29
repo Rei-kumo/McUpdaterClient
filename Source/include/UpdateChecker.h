@@ -11,9 +11,9 @@ private:
 	std::string updateUrl;
 	HttpClient& httpClient;
 	ConfigManager& configManager;
-
+	bool enableApiCache;
 public:
-	UpdateChecker(const std::string& url,HttpClient& http,ConfigManager& config);
+	UpdateChecker(const std::string& url,HttpClient& http,ConfigManager& config,bool apiCache=false);
 
 	bool CheckForUpdates();
 	Json::Value FetchUpdateInfo();

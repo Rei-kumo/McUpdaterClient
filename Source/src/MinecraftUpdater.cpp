@@ -9,13 +9,14 @@
 #include <set>
 #include "Logger.h"
 
-MinecraftUpdater::MinecraftUpdater(const std::string& config, const std::string& url, const std::string& gameDir)
-    : gameDirectory(gameDir),
-      configManager(config),
-      httpClient(configManager.ReadApiTimeout()),
-      updateChecker(url, httpClient, configManager),
-      hasCachedUpdateInfo(false),
-      enableApiCache(configManager.ReadEnableApiCache()) {
+MinecraftUpdater::MinecraftUpdater(const std::string& config,const std::string& url,const std::string& gameDir)
+	: configManager(config),
+	gameDirectory(gameDir),
+	httpClient(configManager.ReadApiTimeout()),
+	updateChecker(url,httpClient,configManager,configManager.ReadEnableApiCache()),
+	hasCachedUpdateInfo(false),
+	enableApiCache(configManager.ReadEnableApiCache()) {
+	g_logger<<"[DEBUG]McUpdaterÒÑ´´½¨£¬ÅäÖÃ: "<<config<<std::endl;
 }
 
 bool MinecraftUpdater::CheckForUpdates() {

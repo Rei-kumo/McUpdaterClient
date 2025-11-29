@@ -8,9 +8,12 @@
 class ConfigManager{
 private:
     std::string configPath;
+    Json::Value cachedConfig;
+    bool configLoaded;
 
 public:
     ConfigManager(const std::string& configPath);
+    ~ConfigManager();
 
     bool InitializeDefaultConfig();
     bool ConfigExists();
@@ -45,6 +48,7 @@ public:
 private:
     bool EnsureConfigDirectory();
     Json::Value CreateDefaultConfig();
+    bool LoadConfig();
 };
 
 #endif

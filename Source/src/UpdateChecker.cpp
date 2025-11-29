@@ -3,8 +3,8 @@
 #include <sstream>
 #include "Logger.h"
 
-UpdateChecker::UpdateChecker(const std::string& url,HttpClient& http,ConfigManager& config)
-    : updateUrl(url),httpClient(http),configManager(config) {
+UpdateChecker::UpdateChecker(const std::string& url,HttpClient& http,ConfigManager& config,bool apiCache)
+    : updateUrl(url),httpClient(http),configManager(config),enableApiCache(apiCache) {
 }
 
 bool UpdateChecker::CheckForUpdates() {
@@ -32,7 +32,7 @@ bool UpdateChecker::CheckForUpdates() {
 
 Json::Value UpdateChecker::FetchUpdateInfo() {
     g_logger<<"[INFO]正在从服务器获取更新信息: "<<updateUrl<<std::endl;
-    g_logger<<"[DEBUG]当前缓存状态: 禁用API缓存"<<std::endl;
+    g_logger<<"[DEBUG]当前缓存状态: "<<(enableApiCache?"启用API缓存":"禁用API缓存")<<std::endl;
 
     std::string jsonResponse=httpClient.Get(updateUrl);
     if(jsonResponse.empty()) {

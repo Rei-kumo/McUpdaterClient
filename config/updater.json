@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "update_url": "https://your-server.com/updates/version.json",
+  "game_directory": "./.minecraft",
+  "auto_update": true,
+  "log_file": "./logs/updater.log",
+  "update_mode": "version",
+  "hash_algorithm": "md5",
+  "enable_file_deletion": true,
+  "skip_major_version_check": false,
+  "enable_api_cache": true,
+  "api_timeout": 60
+}
