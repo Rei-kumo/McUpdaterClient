@@ -14,35 +14,34 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install dependencies with vcpkg
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
         cd vcpkg
         .\bootstrap-vcpkg.bat
         .\vcpkg integrate install
-        .\vcpkg install curl openssl jsoncpp libzip
-        cd ..
+        .\vcpkg install curl openssl jsoncpp libzip --triplet x64-windows
 
-    - name: Configure CMake
+    - name: Configure CMake with vcpkg
       run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+        cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
 
     - name: Build project
       run: |
         cd build
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel
 
     - name: Find and copy binary
       run: |
         cd build
-        if exist "Release\MinecraftUpdater.exe" (
+        if exist "bin\MinecraftUpdater.exe" (
+          copy "bin\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+        ) else if exist "Release\MinecraftUpdater.exe" (
           copy "Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
         ) else if exist "MinecraftUpdater.exe" (
           copy "MinecraftUpdater.exe" ..\MinecraftUpdater.exe
-        ) else if exist "src\Release\MinecraftUpdater.exe" (
-          copy "src\Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
         ) else (
           echo "Error: MinecraftUpdater.exe not found!"
           dir /s *.exe
