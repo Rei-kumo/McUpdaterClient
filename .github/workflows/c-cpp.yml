@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build Windows Release
 
 on:
   push:
@@ -7,118 +7,71 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: linux
-            artifact_name: minecraft-updater-linux
-          - os: windows-latest
-            name: windows
-            artifact_name: minecraft-updater-windows.exe
-          - os: macos-latest
-            name: macos
-            artifact_name: minecraft-updater-macos
-
-    runs-on: ${{ matrix.os }}
+  build-windows:
+    runs-on: windows-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          cmake \
-          pkg-config \
-          libcurl4-openssl-dev \
-          libssl-dev \
-          libjsoncpp-dev \
-          libzip-dev
-
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew update
-        brew install cmake pkg-config curl openssl jsoncpp libzip
-
-    - name: Install dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        # 安装 vcpkg 和依赖
         git clone https://github.com/Microsoft/vcpkg.git
-        .\vcpkg\bootstrap-vcpkg.bat
-        .\vcpkg\vcpkg install curl openssl jsoncpp libzip
+        cd vcpkg
+        .\bootstrap-vcpkg.bat
+        .\vcpkg integrate install
+        .\vcpkg install curl openssl jsoncpp libzip
+        cd ..
 
     - name: Configure CMake
       run: |
         mkdir build
         cd build
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
-        else
-          cmake ..
-        fi
+        cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
     - name: Build project
       run: |
         cd build
         cmake --build . --config Release
 
-    - name: Find and prepare binary (Linux/macOS)
-      if: matrix.os != 'windows-latest'
+    - name: Find and copy binary
       run: |
         cd build
-        find . -name "MinecraftUpdater" -type f -exec cp {} ../MinecraftUpdater \;
-        chmod +x ../MinecraftUpdater
-
-    - name: Find and prepare binary (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        cd build
-        copy "bin\Release\MinecraftUpdater.exe" "..\MinecraftUpdater.exe" || copy "bin\MinecraftUpdater.exe" "..\MinecraftUpdater.exe"
+        if exist "Release\MinecraftUpdater.exe" (
+          copy "Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+        ) else if exist "MinecraftUpdater.exe" (
+          copy "MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+        ) else if exist "src\Release\MinecraftUpdater.exe" (
+          copy "src\Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+        ) else (
+          echo "Error: MinecraftUpdater.exe not found!"
+          dir /s *.exe
+          exit 1
+        )
 
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact_name }}
-        path: |
-          MinecraftUpdater*
-        if-no-files-found: error
+        name: minecraft-updater-windows
+        path: MinecraftUpdater.exe
 
   create-release:
-    needs: build
+    needs: build-windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
     
     steps:
-    - name: Download all artifacts
+    - name: Download artifact
       uses: actions/download-artifact@v4
       with:
-        path: ./artifacts
-
-    - name: Rename binaries
-      run: |
-        mkdir -p release_binaries
-        # Linux
-        find ./artifacts/minecraft-updater-linux -name "MinecraftUpdater*" -type f -exec cp {} ./release_binaries/minecraft-updater-linux \;
-        # Windows
-        find ./artifacts/minecraft-updater-windows.exe -name "MinecraftUpdater*" -type f -exec cp {} ./release_binaries/minecraft-updater-windows.exe \;
-        # macOS
-        find ./artifacts/minecraft-updater-macos -name "MinecraftUpdater*" -type f -exec cp {} ./release_binaries/minecraft-updater-macos \;
-        
-        chmod +x ./release_binaries/minecraft-updater-linux
-        chmod +x ./release_binaries/minecraft-updater-macos
+        name: minecraft-updater-windows
+        path: ./release
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./release_binaries/*
+        files: ./release/MinecraftUpdater.exe
         generate_release_notes: true
         draft: false
         prerelease: false
