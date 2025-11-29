@@ -37,12 +37,18 @@ jobs:
       shell: cmd
       run: |
         cd build
-        if exist "bin\MinecraftUpdater.exe" (
+        if exist "bin\Release\MinecraftUpdater.exe" (
+          copy "bin\Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+          echo "Found binary at bin\Release\MinecraftUpdater.exe"
+        ) else if exist "bin\MinecraftUpdater.exe" (
           copy "bin\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+          echo "Found binary at bin\MinecraftUpdater.exe"
         ) else if exist "Release\MinecraftUpdater.exe" (
           copy "Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+          echo "Found binary at Release\MinecraftUpdater.exe"
         ) else if exist "MinecraftUpdater.exe" (
           copy "MinecraftUpdater.exe" ..\MinecraftUpdater.exe
+          echo "Found binary at MinecraftUpdater.exe"
         ) else (
           echo "Error: MinecraftUpdater.exe not found!"
           dir /s *.exe
