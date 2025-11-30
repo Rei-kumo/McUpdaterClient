@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    add_compile_options(/MT$<$<CONFIG:Debug>:d>)
+endif()
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/Source/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/Source/include)
@@ -50,6 +57,11 @@ if(NOT LIBZIP_FOUND)
     endif()
 endif()
 
+find_package(BZip2 REQUIRED)
+if(BZIP2_FOUND)
+    include_directories(${BZIP2_INCLUDE_DIRS})
+endif()
+
 include_directories(${CURL_INCLUDE_DIRS})
 include_directories(${JSONCPP_INCLUDE_DIRS})
 include_directories(${LIBZIP_INCLUDE_DIRS})
@@ -58,6 +70,15 @@ if(WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     add_compile_options(/W4)
     add_compile_options(/wd4996 /wd4267 /wd4244)
+    
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRT")
+    
+    find_library(WS2_32_LIBRARY ws2_32)
+    find_library(CRYPT32_LIBRARY crypt32)
+    find_library(ADVAPI32_LIBRARY advapi32)
+    find_library(BCRYPT_LIBRARY bcrypt)
+    find_library(IPHLPAPI_LIBRARY iphlpapi)
+    find_library(NORMALIZ_LIBRARY normaliz)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -82,14 +103,18 @@ target_link_libraries(MinecraftUpdater
     OpenSSL::Crypto
     ${JSONCPP_LIBRARIES}
     ${LIBZIP_LIBRARIES}
+    ${BZIP2_LIBRARIES}
 )
 
 if(WIN32)
     target_link_libraries(MinecraftUpdater
-        ws2_32
-        crypt32
-        advapi32
-        bcrypt
+        ${WS2_32_LIBRARY}
+        ${CRYPT32_LIBRARY}
+        ${ADVAPI32_LIBRARY}
+        ${BCRYPT_LIBRARY}
+        ${IPHLPAPI_LIBRARY}
+        ${NORMALIZ_LIBRARY}
+        Wldap32
     )
 endif()
 
