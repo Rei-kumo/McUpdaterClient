@@ -4,10 +4,12 @@ project(MinecraftUpdater)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 设置输出目录
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# 静态编译设置
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     add_compile_options(/MT$<$<CONFIG:Debug>:d>)
@@ -18,6 +20,7 @@ set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/Source/include)
 
 include_directories(${INCLUDE_DIR})
 
+# 查找依赖包 - 使用静态版本
 find_package(PkgConfig QUIET)
 
 if(PKG_CONFIG_FOUND)
@@ -57,6 +60,7 @@ if(NOT LIBZIP_FOUND)
     endif()
 endif()
 
+# 查找 bzip2 库
 find_package(BZip2 REQUIRED)
 if(BZIP2_FOUND)
     include_directories(${BZIP2_INCLUDE_DIRS})
@@ -66,19 +70,14 @@ include_directories(${CURL_INCLUDE_DIRS})
 include_directories(${JSONCPP_INCLUDE_DIRS})
 include_directories(${LIBZIP_INCLUDE_DIRS})
 
+# Windows 特定设置
 if(WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     add_compile_options(/W4)
     add_compile_options(/wd4996 /wd4267 /wd4244)
     
+    # 静态链接设置
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRT")
-    
-    find_library(WS2_32_LIBRARY ws2_32)
-    find_library(CRYPT32_LIBRARY crypt32)
-    find_library(ADVAPI32_LIBRARY advapi32)
-    find_library(BCRYPT_LIBRARY bcrypt)
-    find_library(IPHLPAPI_LIBRARY iphlpapi)
-    find_library(NORMALIZ_LIBRARY normaliz)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -87,6 +86,7 @@ elseif(APPLE)
     add_compile_options(-Wall -Wextra -Wno-deprecated-declarations)
 endif()
 
+# 添加可执行文件
 add_executable(MinecraftUpdater
     ${SOURCE_DIR}/main.cpp
     ${SOURCE_DIR}/MinecraftUpdater.cpp
@@ -97,6 +97,7 @@ add_executable(MinecraftUpdater
     ${SOURCE_DIR}/logger.cpp
 )
 
+# 链接库 - 使用静态链接
 target_link_libraries(MinecraftUpdater
     ${CURL_LIBRARIES}
     OpenSSL::SSL
@@ -106,15 +107,16 @@ target_link_libraries(MinecraftUpdater
     ${BZIP2_LIBRARIES}
 )
 
+# Windows 特定链接 - 直接使用库名而不是变量
 if(WIN32)
     target_link_libraries(MinecraftUpdater
-        ${WS2_32_LIBRARY}
-        ${CRYPT32_LIBRARY}
-        ${ADVAPI32_LIBRARY}
-        ${BCRYPT_LIBRARY}
-        ${IPHLPAPI_LIBRARY}
-        ${NORMALIZ_LIBRARY}
-        Wldap32
+        ws2_32
+        crypt32
+        advapi32
+        bcrypt
+        iphlpapi
+        normaliz
+        wldap32
     )
 endif()
 
@@ -127,6 +129,7 @@ if(APPLE)
     )
 endif()
 
+# 创建配置和日志目录
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/config)
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/logs)
 

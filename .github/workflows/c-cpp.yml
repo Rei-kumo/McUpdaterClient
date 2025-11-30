@@ -1,4 +1,4 @@
-name: Build Windows Static Release
+﻿name: Build Windows Static Release
 
 on:
   push:
@@ -45,7 +45,11 @@ jobs:
       run: |
         cd build
         if exist "Release\MinecraftUpdater.exe" (
-          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" && (echo "Found DLL dependencies" && exit 1) || echo "Static linking successful - no external DLLs!"
+          echo "=== Checking for external DLL dependencies ==="
+          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" && (echo "❌ Found external DLL dependencies!" && exit 1) || echo "✓ Static linking successful - no external DLLs!"
+        ) else (
+          echo "❌ Executable not found!"
+          exit 1
         )
 
     - name: Upload binary
