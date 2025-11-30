@@ -29,26 +29,22 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake .. `
-          -G "Visual Studio 17 2022" `
-          -A x64 `
-          -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-          -DVCPKG_TARGET_TRIPLET=x64-windows-static
+        cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
     - name: Build project
       run: |
         cd build
-        cmake --build . --config Release --parallel /m
+        cmake --build . --config Release --parallel
 
     - name: Verify static linking
       shell: cmd
       run: |
         cd build
         if exist "Release\MinecraftUpdater.exe" (
-          echo "=== Checking for external DLL dependencies ==="
-          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" && (echo "❌ Found external DLL dependencies!" && exit 1) || echo "✓ Static linking successful - no external DLLs!"
+          echo "Checking for external DLL dependencies"
+          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" && (echo "Found DLL dependencies" && exit 1) || echo "Static linking successful - no external DLLs"
         ) else (
-          echo "❌ Executable not found!"
+          echo "Executable not found"
           exit 1
         )
 
