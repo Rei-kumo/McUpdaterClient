@@ -8,7 +8,6 @@ on:
 
 env:
   VCPKG_TRIPLET: x64-windows-static
-  VCPKG_DEFAULT_TRIPLET: x64-windows-static
 
 jobs:
   build-windows:
@@ -25,7 +24,7 @@ jobs:
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
         cd vcpkg
-        .\bootstrap-vcpkg.bat
+        .\bootstrap-vcpkg.bat -disableMetrics
         .\vcpkg integrate install
         .\vcpkg install curl openssl jsoncpp libzip bzip2 zlib zstd --triplet $env:VCPKG_TRIPLET
 
@@ -36,8 +35,7 @@ jobs:
         cmake .. `
           -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_TARGET_TRIPLET=$env:VCPKG_TRIPLET `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          -DCMAKE_BUILD_TYPE=Release
 
     - name: Build project
       run: |
@@ -54,6 +52,9 @@ jobs:
         ) else if exist "bin\MinecraftUpdater.exe" (
           echo "Checking dependencies for bin\MinecraftUpdater.exe"
           dumpbin /dependents "bin\MinecraftUpdater.exe" | findstr ".dll" || echo "No external DLL dependencies found - static linking successful!"
+        ) else if exist "Release\MinecraftUpdater.exe" (
+          echo "Checking dependencies for Release\MinecraftUpdater.exe"
+          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" || echo "No external DLL dependencies found - static linking successful!"
         )
 
     - name: Find and copy binary
