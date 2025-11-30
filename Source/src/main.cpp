@@ -42,7 +42,7 @@ int main() {
         return 1;
     }
 
-    g_logger<<"[INFO]当前McUpdaterClient版本:v0.0.4"<<std::endl;
+    g_logger<<"[INFO]当前McUpdaterClient版本:v0.0.5"<<std::endl;
     g_logger<<"[INFO]Made by Reikumo."<<std::endl;
     g_logger<<"[INFO]配置加载成功："<<std::endl;
     g_logger<<"[INFO]  游戏目录: "<<gameDir<<std::endl;
