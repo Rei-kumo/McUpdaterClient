@@ -17,20 +17,22 @@ jobs:
     - name: Cache vcpkg
       uses: actions/cache@v3
       with:
-        path: vcpkg/installed
-        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', 'vcpkg/scripts/buildsystems/vcpkg.cmake') }}
+        path: |
+          vcpkg
+          ~/.cache/vcpkg
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
         restore-keys: |
           vcpkg-${{ runner.os }}-
 
     - name: Install dependencies with vcpkg
       run: |
-        if (!(Test-Path "vcpkg")) {
+        if (!(Test-Path "vcpkg/vcpkg.exe")) {
           git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
         }
-        cd vcpkg
-        .\bootstrap-vcpkg.bat -disableMetrics
-        .\vcpkg integrate install
-        .\vcpkg install curl:x64-windows-static openssl:x64-windows-static jsoncpp:x64-windows-static libzip:x64-windows-static bzip2:x64-windows-static zlib:x64-windows-static zstd:x64-windows-static
+        .\vcpkg\vcpkg integrate install
+        .\vcpkg\vcpkg install curl:x64-windows-static openssl:x64-windows-static jsoncpp:x64-windows-static libzip:x64-windows-static bzip2:x64-windows-static zlib:x64-windows-static zstd:x64-windows-static
 
     - name: Configure and build
       run: |
