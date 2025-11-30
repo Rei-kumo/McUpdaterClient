@@ -1,4 +1,4 @@
-ï»¿#include <iostream>
+#include <iostream>
 #include <string>
 #include "MinecraftUpdater.h"
 
@@ -8,53 +8,53 @@ int main() {
     ConfigManager configManager(cfg);
 
     if(!configManager.ConfigExists()){
-        std::cout<<"[INFO]æœªæ‰¾åˆ°é…ç½®æ–‡ä»¶ï¼Œæ­£åœ¨ç”Ÿæˆé»˜è®¤é…ç½®æ–‡ä»¶..."<<std::endl;
+        std::cout<<"[INFO]Î´ÕÒµ½ÅäÖÃÎÄ¼þ£¬ÕýÔÚÉú³ÉÄ¬ÈÏÅäÖÃÎÄ¼þ..."<<std::endl;
 
         if(!configManager.InitializeDefaultConfig()){
-            std::cerr<<"[ERROR]ç”Ÿæˆé»˜è®¤é…ç½®æ–‡ä»¶å¤±è´¥!"<<std::endl;
+            std::cerr<<"[ERROR]Éú³ÉÄ¬ÈÏÅäÖÃÎÄ¼þÊ§°Ü!"<<std::endl;
             return 1;
         }
 
-        std::cout<<"[INFO]é»˜è®¤é…ç½®æ–‡ä»¶å·²ç”Ÿæˆï¼Œè¯·ç¼–è¾‘"<<cfg<<"æ–‡ä»¶æ¥é…ç½®æ›´æ–°æœåŠ¡å™¨åœ°å€å’Œæ¸¸æˆç›®å½•ï¼"<<std::endl;
-        std::cout<<"[INFO]æŒ‰å›žè½¦é”®é€€å‡º..."<<std::endl;
+        std::cout<<"[INFO]Ä¬ÈÏÅäÖÃÎÄ¼þÒÑÉú³É£¬Çë±à¼­"<<cfg<<"ÎÄ¼þÀ´ÅäÖÃ¸üÐÂ·þÎñÆ÷µØÖ·ºÍÓÎÏ·Ä¿Â¼£¡"<<std::endl;
+        std::cout<<"[INFO]°´»Ø³µ¼üÍË³ö..."<<std::endl;
         std::cin.get();
         return 0;
     }
 
     std::string logFile=configManager.ReadLogFile();
     if(!g_logger.Initialize(logFile)){
-        std::cerr<<"[ERROR]æ— æ³•åˆå§‹åŒ–æ—¥å¿—æ–‡ä»¶ï¼Œå°†ç»§ç»­ä½¿ç”¨æŽ§åˆ¶å°è¾“å‡º"<<std::endl;
+        std::cerr<<"[ERROR]ÎÞ·¨³õÊ¼»¯ÈÕÖ¾ÎÄ¼þ£¬½«¼ÌÐøÊ¹ÓÃ¿ØÖÆÌ¨Êä³ö"<<std::endl;
     }
     else{
-        std::cout<<"[INFO]æ—¥å¿—æ–‡ä»¶:"<<logFile<<std::endl;
+        std::cout<<"[INFO]ÈÕÖ¾ÎÄ¼þ:"<<logFile<<std::endl;
     }
 
     std::string apiUrl=configManager.ReadUpdateUrl();
     std::string gameDir=configManager.ReadGameDirectory();
 
     if(apiUrl.empty()){
-        g_logger<<"[ERROR]é…ç½®æ–‡ä»¶ä¸­æœªè®¾ç½®æ›´æ–°api(update_url)ï¼"<<std::endl;
+        g_logger<<"[ERROR]ÅäÖÃÎÄ¼þÖÐÎ´ÉèÖÃ¸üÐÂapi(update_url)£¡"<<std::endl;
         return 1;
     }
 
     if(gameDir.empty()){
-        g_logger<<"[ERROR]é…ç½®æ–‡ä»¶ä¸­æœªè®¾ç½®æ¸¸æˆç›®å½•(game_directory)ï¼"<<std::endl;
+        g_logger<<"[ERROR]ÅäÖÃÎÄ¼þÖÐÎ´ÉèÖÃÓÎÏ·Ä¿Â¼(game_directory)£¡"<<std::endl;
         return 1;
     }
 
-    g_logger<<"[INFO]å½“å‰McUpdaterClientç‰ˆæœ¬:v0.0.4"<<std::endl;
+    g_logger<<"[INFO]µ±Ç°McUpdaterClient°æ±¾:v0.0.4"<<std::endl;
     g_logger<<"[INFO]Made by Reikumo."<<std::endl;
-    g_logger<<"[INFO]é…ç½®åŠ è½½æˆåŠŸï¼š"<<std::endl;
-    g_logger<<"[INFO]  æ¸¸æˆç›®å½•: "<<gameDir<<std::endl;
-    g_logger<<"[INFO]  æ›´æ–°æœåŠ¡å™¨api: "<<apiUrl<<std::endl;
-    g_logger<<"[INFO]  è‡ªåŠ¨æ›´æ–°çŠ¶æ€: "<<(configManager.ReadAutoUpdate()?"å¼€å¯":"å…³é—­")<<std::endl;
-    g_logger<<"[INFO]  æ—¥å¿—æ–‡ä»¶åœ°å€: "<<logFile<<std::endl;
-    g_logger<<"[INFO]  å®¢æˆ·ç«¯æ›´æ–°æ¨¡å¼: "<<configManager.ReadUpdateMode()<<" (å¯èƒ½è¢«æœåŠ¡ç«¯è¦†ç›–)"<<std::endl;
-    g_logger<<"[INFO]  å“ˆå¸Œç®—æ³•: "<<configManager.ReadHashAlgorithm()<<std::endl;
-    g_logger<<"[INFO]  æ–‡ä»¶åˆ é™¤åŠŸèƒ½: "<<(configManager.ReadEnableFileDeletion()?"å¼€å¯":"å…³é—­")<<std::endl;
-    g_logger<<"[INFO]  è·³è¿‡ä¸»ç‰ˆæœ¬æ£€æŸ¥: "<<(configManager.ReadSkipMajorVersionCheck()?"æ˜¯":"å¦")<<std::endl;
-    g_logger<<"[INFO]  APIç¼“å­˜: "<<(configManager.ReadEnableApiCache()?"å¯ç”¨":"ç¦ç”¨")<<std::endl;
-    g_logger<<"[INFO]  APIè¶…æ—¶æ—¶é—´: "<<configManager.ReadApiTimeout()<<"ç§’"<<std::endl;
+    g_logger<<"[INFO]ÅäÖÃ¼ÓÔØ³É¹¦£º"<<std::endl;
+    g_logger<<"[INFO]  ÓÎÏ·Ä¿Â¼: "<<gameDir<<std::endl;
+    g_logger<<"[INFO]  ¸üÐÂ·þÎñÆ÷api: "<<apiUrl<<std::endl;
+    g_logger<<"[INFO]  ×Ô¶¯¸üÐÂ×´Ì¬: "<<(configManager.ReadAutoUpdate()?"¿ªÆô":"¹Ø±Õ")<<std::endl;
+    g_logger<<"[INFO]  ÈÕÖ¾ÎÄ¼þµØÖ·: "<<logFile<<std::endl;
+    g_logger<<"[INFO]  ¿Í»§¶Ë¸üÐÂÄ£Ê½: "<<configManager.ReadUpdateMode()<<" (¿ÉÄÜ±»·þÎñ¶Ë¸²¸Ç)"<<std::endl;
+    g_logger<<"[INFO]  ¹þÏ£Ëã·¨: "<<configManager.ReadHashAlgorithm()<<std::endl;
+    g_logger<<"[INFO]  ÎÄ¼þÉ¾³ý¹¦ÄÜ: "<<(configManager.ReadEnableFileDeletion()?"¿ªÆô":"¹Ø±Õ")<<std::endl;
+    g_logger<<"[INFO]  Ìø¹ýÖ÷°æ±¾¼ì²é: "<<(configManager.ReadSkipMajorVersionCheck()?"ÊÇ":"·ñ")<<std::endl;
+    g_logger<<"[INFO]  API»º´æ: "<<(configManager.ReadEnableApiCache()?"ÆôÓÃ":"½ûÓÃ")<<std::endl;
+    g_logger<<"[INFO]  API³¬Ê±Ê±¼ä: "<<configManager.ReadApiTimeout()<<"Ãë"<<std::endl;
     g_logger<<std::endl;
 
     {
@@ -62,40 +62,40 @@ int main() {
 
         if(updater.CheckForUpdates()){
             if(configManager.ReadAutoUpdate()){
-                g_logger<<"[INFO]è‡ªåŠ¨æ›´æ–°å·²å¼€å¯ï¼Œå¼€å§‹æ›´æ–°..."<<std::endl;
+                g_logger<<"[INFO]×Ô¶¯¸üÐÂÒÑ¿ªÆô£¬¿ªÊ¼¸üÐÂ..."<<std::endl;
                 if(updater.ForceUpdate(false)){
-                    g_logger<<"[INFO]è‡ªåŠ¨æ›´æ–°æˆåŠŸï¼"<<std::endl;
+                    g_logger<<"[INFO]×Ô¶¯¸üÐÂ³É¹¦£¡"<<std::endl;
                 }
                 else{
-                    g_logger<<"[ERROR]è‡ªåŠ¨æ›´æ–°å¤±è´¥"<<std::endl;
+                    g_logger<<"[ERROR]×Ô¶¯¸üÐÂÊ§°Ü"<<std::endl;
                     return 1;
                 }
             }
             else{
-                std::cout<<"[INFO]æ˜¯å¦ç«‹å³æ›´æ–°ï¼Ÿ (y/n): ";
+                std::cout<<"[INFO]ÊÇ·ñÁ¢¼´¸üÐÂ£¿ (y/n): ";
                 char choice;
                 std::cin>>choice;
 
                 if(choice=='y'||choice=='Y'){
-                    std::cout<<"[INFO]æ˜¯å¦å¼ºåˆ¶åŒæ­¥(y/nï¼Œå¼ºåˆ¶åŒæ­¥ä¼šåœ¨æ›´æ–°å¤±è´¥æ—¶ä¸­æ­¢):";
+                    std::cout<<"[INFO]ÊÇ·ñÇ¿ÖÆÍ¬²½(y/n£¬Ç¿ÖÆÍ¬²½»áÔÚ¸üÐÂÊ§°ÜÊ±ÖÐÖ¹):";
                     std::cin>>choice;
                     bool forceSync=(choice=='y'||choice=='Y');
 
                     if(updater.ForceUpdate(forceSync)){
-                        g_logger<<"[INFO]æ›´æ–°æˆåŠŸï¼"<<std::endl;
+                        g_logger<<"[INFO]¸üÐÂ³É¹¦£¡"<<std::endl;
                     }
                     else{
-                        g_logger<<"[ERROR]æ›´æ–°å¤±è´¥ï¼"<<std::endl;
+                        g_logger<<"[ERROR]¸üÐÂÊ§°Ü£¡"<<std::endl;
                         return 1;
                     }
                 }
                 else{
-                    g_logger<<"[INFO]å·²å–æ¶ˆæ›´æ–°ã€‚"<<std::endl;
+                    g_logger<<"[INFO]ÒÑÈ¡Ïû¸üÐÂ¡£"<<std::endl;
                 }
             }
         }
     }
 
-    g_logger<<"[INFO]=== McUpdaterClient æ—¥å¿—ç»“æŸ ==="<<std::endl;
+    g_logger<<"[INFO]=== McUpdaterClient ÈÕÖ¾½áÊø ==="<<std::endl;
     return 0;
 }

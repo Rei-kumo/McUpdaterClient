@@ -1,4 +1,4 @@
-ï»¿#include "UpdateChecker.h"
+#include "UpdateChecker.h"
 #include <iostream>
 #include <sstream>
 #include "Logger.h"
@@ -16,56 +16,56 @@ bool UpdateChecker::CheckForUpdates() {
     std::string localVersion=configManager.ReadVersion();
     std::string remoteVersion=updateInfo["version"].asString();
 
-    g_logger<<"[INFO]æœ¬åœ°æ¸¸æˆç‰ˆæœ¬: "<<localVersion<<std::endl;
-    g_logger<<"[INFO]è¿œç¨‹æ¸¸æˆç‰ˆæœ¬: "<<remoteVersion<<std::endl;
+    g_logger<<"[INFO]±¾µØÓÎÏ·°æ±¾: "<<localVersion<<std::endl;
+    g_logger<<"[INFO]Ô¶³ÌÓÎÏ·°æ±¾: "<<remoteVersion<<std::endl;
 
     if(remoteVersion>localVersion) {
-        g_logger<<"[INFO]å‘çŽ°æ–°ç‰ˆæœ¬: "<<remoteVersion<<std::endl;
+        g_logger<<"[INFO]·¢ÏÖÐÂ°æ±¾: "<<remoteVersion<<std::endl;
         DisplayChangelog(updateInfo["changelog"]);
         return true;
     }
     else {
-        g_logger<<"[INFO]å½“å‰å·²æ˜¯æœ€æ–°ç‰ˆæœ¬"<<std::endl;
+        g_logger<<"[INFO]µ±Ç°ÒÑÊÇ×îÐÂ°æ±¾"<<std::endl;
         return false;
     }
 }
 
 Json::Value UpdateChecker::FetchUpdateInfo() {
-    g_logger<<"[INFO]æ­£åœ¨ä»ŽæœåŠ¡å™¨èŽ·å–æ›´æ–°ä¿¡æ¯: "<<updateUrl<<std::endl;
-    g_logger<<"[DEBUG]å½“å‰ç¼“å­˜çŠ¶æ€: "<<(enableApiCache?"å¯ç”¨APIç¼“å­˜":"ç¦ç”¨APIç¼“å­˜")<<std::endl;
+    g_logger<<"[INFO]ÕýÔÚ´Ó·þÎñÆ÷»ñÈ¡¸üÐÂÐÅÏ¢: "<<updateUrl<<std::endl;
+    g_logger<<"[DEBUG]µ±Ç°»º´æ×´Ì¬: "<<(enableApiCache?"ÆôÓÃAPI»º´æ":"½ûÓÃAPI»º´æ")<<std::endl;
 
     std::string jsonResponse=httpClient.Get(updateUrl);
     if(jsonResponse.empty()) {
-        g_logger<<"[ERROR]é”™è¯¯: èŽ·å–æ›´æ–°ä¿¡æ¯è¿”å›žä¸ºç©º"<<std::endl;
+        g_logger<<"[ERROR]´íÎó: »ñÈ¡¸üÐÂÐÅÏ¢·µ»ØÎª¿Õ"<<std::endl;
         return Json::Value();
     }
 
-    g_logger<<"[DEBUG]æœåŠ¡å™¨å“åº”: "<<jsonResponse<<std::endl;
+    g_logger<<"[DEBUG]·þÎñÆ÷ÏìÓ¦: "<<jsonResponse<<std::endl;
 
     Json::Value updateInfo;
     if(!ParseUpdateInfo(jsonResponse,updateInfo)) {
-        g_logger<<"[ERROR]é”™è¯¯: è§£æžæ›´æ–°ä¿¡æ¯å¤±è´¥"<<std::endl;
+        g_logger<<"[ERROR]´íÎó: ½âÎö¸üÐÂÐÅÏ¢Ê§°Ü"<<std::endl;
         return Json::Value();
     }
 
     if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
         std::string serverMode=updateInfo["update_mode"].asString();
-        g_logger<<"[INFO]æœåŠ¡ç«¯æŒ‡å®šæ›´æ–°æ¨¡å¼: "<<serverMode<<std::endl;
+        g_logger<<"[INFO]·þÎñ¶ËÖ¸¶¨¸üÐÂÄ£Ê½: "<<serverMode<<std::endl;
 
         if(serverMode!="version"&&serverMode!="hash") {
-            g_logger<<"[WARN]è­¦å‘Š: æœåŠ¡ç«¯æŒ‡å®šäº†æ— æ•ˆçš„æ›´æ–°æ¨¡å¼: "<<serverMode<<", å°†ä½¿ç”¨å®¢æˆ·ç«¯é…ç½®"<<std::endl;
+            g_logger<<"[WARN]¾¯¸æ: ·þÎñ¶ËÖ¸¶¨ÁËÎÞÐ§µÄ¸üÐÂÄ£Ê½: "<<serverMode<<", ½«Ê¹ÓÃ¿Í»§¶ËÅäÖÃ"<<std::endl;
         }
     }
     else {
-        g_logger<<"[INFO]æœåŠ¡ç«¯æœªæŒ‡å®šæ›´æ–°æ¨¡å¼ï¼Œå°†ä½¿ç”¨å®¢æˆ·ç«¯é…ç½®"<<std::endl;
+        g_logger<<"[INFO]·þÎñ¶ËÎ´Ö¸¶¨¸üÐÂÄ£Ê½£¬½«Ê¹ÓÃ¿Í»§¶ËÅäÖÃ"<<std::endl;
     }
 
     if(!updateInfo.isMember("version")) {
-        g_logger<<"[ERROR]é”™è¯¯: æ›´æ–°ä¿¡æ¯ç¼ºå°‘ç‰ˆæœ¬å·(version)å­—æ®µ"<<std::endl;
+        g_logger<<"[ERROR]´íÎó: ¸üÐÂÐÅÏ¢È±ÉÙ°æ±¾ºÅ(version)×Ö¶Î"<<std::endl;
         return Json::Value();
     }
 
-    g_logger<<"[INFO]æˆåŠŸèŽ·å–æ›´æ–°ä¿¡æ¯ï¼Œç‰ˆæœ¬: "<<updateInfo["version"].asString()<<std::endl;
+    g_logger<<"[INFO]³É¹¦»ñÈ¡¸üÐÂÐÅÏ¢£¬°æ±¾: "<<updateInfo["version"].asString()<<std::endl;
     return updateInfo;
 }
 
@@ -78,24 +78,24 @@ bool UpdateChecker::ParseUpdateInfo(const std::string& jsonData,Json::Value& upd
         return true;
     }
     else {
-        g_logger<<"[ERROR]JSONè§£æžé”™è¯¯: "<<errors<<std::endl;
+        g_logger<<"[ERROR]JSON½âÎö´íÎó: "<<errors<<std::endl;
         return false;
     }
 }
 
 void UpdateChecker::DisplayChangelog(const Json::Value& changelog) {
     if(changelog.isNull()||!changelog.isArray()) {
-        g_logger<<"[INFO]æš‚æ— æ›´æ–°æ—¥å¿—"<<std::endl;
+        g_logger<<"[INFO]ÔÝÎÞ¸üÐÂÈÕÖ¾"<<std::endl;
         return;
     }
 
-    std::cout<<"\n=== æ›´æ–°å†…å®¹ ==="<<std::endl;
+    std::cout<<"\n=== ¸üÐÂÄÚÈÝ ==="<<std::endl;
     for(const auto& change:changelog) {
         std::cout<<"- "<<change.asString()<<std::endl;
     }
     std::cout<<"================\n"<<std::endl;
 
-    g_logger<<"[INFO]æ›´æ–°å†…å®¹:"<<std::endl;
+    g_logger<<"[INFO]¸üÐÂÄÚÈÝ:"<<std::endl;
     for(const auto& change:changelog) {
         g_logger<<"[INFO]  - "<<change.asString()<<std::endl;
     }

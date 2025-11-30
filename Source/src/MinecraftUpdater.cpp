@@ -1,4 +1,4 @@
-ï»¿#include "MinecraftUpdater.h"
+#include "MinecraftUpdater.h"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -16,14 +16,14 @@ MinecraftUpdater::MinecraftUpdater(const std::string& config,const std::string& 
 	updateChecker(url,httpClient,configManager,configManager.ReadEnableApiCache()),
 	hasCachedUpdateInfo(false),
 	enableApiCache(configManager.ReadEnableApiCache()) {
-	g_logger<<"[DEBUG]McUpdaterå·²åˆ›å»ºï¼Œé…ç½®: "<<config<<std::endl;
+	g_logger<<"[DEBUG]McUpdaterÒÑ´´½¨£¬ÅäÖÃ: "<<config<<std::endl;
 }
 
 bool MinecraftUpdater::CheckForUpdates() {
-	g_logger<<"[INFO]å¼€å§‹æ£€æŸ¥æ›´æ–°..."<<std::endl;
+	g_logger<<"[INFO]¿ªÊ¼¼ì²é¸üÐÂ..."<<std::endl;
 
 	if(!enableApiCache) {
-		g_logger<<"[INFO]APIç¼“å­˜å·²ç¦ç”¨ï¼Œå¼ºåˆ¶é‡æ–°èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[INFO]API»º´æÒÑ½ûÓÃ£¬Ç¿ÖÆÖØÐÂ»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 		hasCachedUpdateInfo=false;
 		cachedUpdateInfo=Json::Value();
 	}
@@ -31,7 +31,7 @@ bool MinecraftUpdater::CheckForUpdates() {
 	Json::Value updateInfo;
 	if(hasCachedUpdateInfo) {
 		updateInfo=cachedUpdateInfo;
-		g_logger<<"[INFO]ä½¿ç”¨ç¼“å­˜çš„æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[INFO]Ê¹ÓÃ»º´æµÄ¸üÐÂÐÅÏ¢"<<std::endl;
 	}
 	else {
 		updateInfo=updateChecker.FetchUpdateInfo();
@@ -42,18 +42,18 @@ bool MinecraftUpdater::CheckForUpdates() {
 	}
 
 	if(updateInfo.isNull()) {
-		g_logger<<"[ERROR]é”™è¯¯: æ— æ³•èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÎÞ·¨»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 		return false;
 	}
 
 	std::string serverUpdateMode;
 	if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
 		serverUpdateMode=updateInfo["update_mode"].asString();
-		g_logger<<"[INFO]æœåŠ¡ç«¯å¼ºåˆ¶ä½¿ç”¨æ›´æ–°æ¨¡å¼: "<<serverUpdateMode<<std::endl;
+		g_logger<<"[INFO]·þÎñ¶ËÇ¿ÖÆÊ¹ÓÃ¸üÐÂÄ£Ê½: "<<serverUpdateMode<<std::endl;
 	}
 	else {
 		serverUpdateMode=configManager.ReadUpdateMode();
-		g_logger<<"[INFO]ä½¿ç”¨å®¢æˆ·ç«¯é…ç½®çš„æ›´æ–°æ¨¡å¼: "<<serverUpdateMode<<std::endl;
+		g_logger<<"[INFO]Ê¹ÓÃ¿Í»§¶ËÅäÖÃµÄ¸üÐÂÄ£Ê½: "<<serverUpdateMode<<std::endl;
 	}
 
 	if(serverUpdateMode=="hash") {
@@ -66,7 +66,7 @@ bool MinecraftUpdater::CheckForUpdates() {
 
 bool MinecraftUpdater::CheckForUpdatesByHash() {
 	if(!enableApiCache) {
-		g_logger<<"[INFO]APIç¼“å­˜å·²ç¦ç”¨ï¼Œå¼ºåˆ¶é‡æ–°èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[INFO]API»º´æÒÑ½ûÓÃ£¬Ç¿ÖÆÖØÐÂ»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 		hasCachedUpdateInfo=false;
 		cachedUpdateInfo=Json::Value();
 	}
@@ -75,12 +75,12 @@ bool MinecraftUpdater::CheckForUpdatesByHash() {
 
 	if(hasCachedUpdateInfo) {
 		updateInfo=cachedUpdateInfo;
-		g_logger<<"[INFO]ä½¿ç”¨ç¼“å­˜çš„æ›´æ–°ä¿¡æ¯è¿›è¡Œå“ˆå¸Œæ£€æŸ¥"<<std::endl;
+		g_logger<<"[INFO]Ê¹ÓÃ»º´æµÄ¸üÐÂÐÅÏ¢½øÐÐ¹þÏ£¼ì²é"<<std::endl;
 	}
 	else {
 		updateInfo=updateChecker.FetchUpdateInfo();
 		if(updateInfo.isNull()) {
-			g_logger<<"[ERROR]é”™è¯¯: æ— æ³•èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ÎÞ·¨»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 			return false;
 		}
 		cachedUpdateInfo=updateInfo;
@@ -90,47 +90,47 @@ bool MinecraftUpdater::CheckForUpdatesByHash() {
 	std::string localVersion=configManager.ReadVersion();
 	std::string remoteVersion=updateInfo["version"].asString();
 
-	g_logger<<"[INFO]æœ¬åœ°ç‰ˆæœ¬: "<<localVersion<<std::endl;
-	g_logger<<"[INFO]è¿œç¨‹ç‰ˆæœ¬: "<<remoteVersion<<std::endl;
+	g_logger<<"[INFO]±¾µØ°æ±¾: "<<localVersion<<std::endl;
+	g_logger<<"[INFO]Ô¶³Ì°æ±¾: "<<remoteVersion<<std::endl;
 
 	bool isConsistent=CheckFileConsistency(updateInfo["files"],updateInfo["directories"]);
 
 	if(remoteVersion>localVersion) {
-		std::cout<<"[INFO]å‘çŽ°æ–°ç‰ˆæœ¬: "<<remoteVersion<<std::endl;
+		std::cout<<"[INFO]·¢ÏÖÐÂ°æ±¾: "<<remoteVersion<<std::endl;
 
 		if(ShouldForceHashUpdate(localVersion,remoteVersion)) {
-			g_logger<<"[INFO]æ£€æµ‹åˆ°è·¨è¶Šå¤šä¸ªç‰ˆæœ¬æ›´æ–°"<<std::endl;
+			g_logger<<"[INFO]¼ì²âµ½¿çÔ½¶à¸ö°æ±¾¸üÐÂ"<<std::endl;
 		}
 
 		if(!isConsistent) {
-			g_logger<<"[INFO]æ–‡ä»¶ä¸€è‡´æ€§æ£€æŸ¥å¤±è´¥ï¼Œéœ€è¦æ›´æ–°"<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þÒ»ÖÂÐÔ¼ì²éÊ§°Ü£¬ÐèÒª¸üÐÂ"<<std::endl;
 			return true;
 		}
 		else {
-			g_logger<<"[INFO]ç‰ˆæœ¬å·æ›´æ–°ä½†æ–‡ä»¶å·²æ˜¯æœ€æ–°ï¼Œæ— éœ€æ›´æ–°"<<std::endl;
+			g_logger<<"[INFO]°æ±¾ºÅ¸üÐÂµ«ÎÄ¼þÒÑÊÇ×îÐÂ£¬ÎÞÐè¸üÐÂ"<<std::endl;
 			return false;
 		}
 	}
 	else if(remoteVersion==localVersion) {
 		if(!isConsistent) {
-			g_logger<<"[INFO]ç‰ˆæœ¬å·ç›¸åŒä½†æ–‡ä»¶ä¸ä¸€è‡´ï¼Œéœ€è¦ä¿®å¤"<<std::endl;
+			g_logger<<"[INFO]°æ±¾ºÅÏàÍ¬µ«ÎÄ¼þ²»Ò»ÖÂ£¬ÐèÒªÐÞ¸´"<<std::endl;
 			return true;
 		}
 		else {
-			g_logger<<"[INFO]å½“å‰å·²æ˜¯æœ€æ–°ç‰ˆæœ¬ä¸”æ–‡ä»¶å®Œæ•´"<<std::endl;
+			g_logger<<"[INFO]µ±Ç°ÒÑÊÇ×îÐÂ°æ±¾ÇÒÎÄ¼þÍêÕû"<<std::endl;
 			return false;
 		}
 	}
 	else {
 		if(!isConsistent) {
-			g_logger<<"[WARN]æœ¬åœ°ç‰ˆæœ¬è¾ƒæ–°ä½†æ–‡ä»¶ä¸ä¸€è‡´ï¼Œå»ºè®®ä¿®å¤"<<std::endl;
-			std::cout<<"[WARN]æœ¬åœ°ç‰ˆæœ¬è¾ƒæ–°ä½†æ–‡ä»¶å¯èƒ½æŸåï¼Œæ˜¯å¦ä¿®å¤ï¼Ÿ(y/n): ";
+			g_logger<<"[WARN]±¾µØ°æ±¾½ÏÐÂµ«ÎÄ¼þ²»Ò»ÖÂ£¬½¨ÒéÐÞ¸´"<<std::endl;
+			std::cout<<"[WARN]±¾µØ°æ±¾½ÏÐÂµ«ÎÄ¼þ¿ÉÄÜËð»µ£¬ÊÇ·ñÐÞ¸´£¿(y/n): ";
 			char choice;
 			std::cin>>choice;
 			return (choice=='y'||choice=='Y');
 		}
 		else {
-			g_logger<<"[INFO]æœ¬åœ°ç‰ˆæœ¬è¾ƒæ–°ä¸”æ–‡ä»¶å®Œæ•´"<<std::endl;
+			g_logger<<"[INFO]±¾µØ°æ±¾½ÏÐÂÇÒÎÄ¼þÍêÕû"<<std::endl;
 			return false;
 		}
 	}
@@ -141,7 +141,7 @@ bool MinecraftUpdater::ShouldForceHashUpdate(const std::string& localVersion,con
 		return false;
 	}
 
-	// è¿™é‡Œçš„ç‰ˆæœ¬å·ç›®å‰æ¥è¯´æ˜¯1.1.1è¿™ç§ï¼Œå¦‚æžœè‡ªå®šä¹‰çš„è¯å¯èƒ½ä¼šæœ‰bugï¼Œä½†æ˜¯1åº”è¯¥ä¼šæœ‰è‡ªå®šä¹‰çš„éœ€æ±‚ï¼Œä¹‹åŽä¿®æ”¹
+	// ÕâÀïµÄ°æ±¾ºÅÄ¿Ç°À´ËµÊÇ1.1.1ÕâÖÖ£¬Èç¹û×Ô¶¨ÒåµÄ»°¿ÉÄÜ»áÓÐbug£¬µ«ÊÇ1Ó¦¸Ã»áÓÐ×Ô¶¨ÒåµÄÐèÇó£¬Ö®ºóÐÞ¸Ä
 	std::regex versionRegex(R"((\d+)\.(\d+)\.(\d+))");
 	std::smatch localMatch,remoteMatch;
 
@@ -173,7 +173,7 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 	int mismatchedFiles=0;
 	int totalChecked=0;
 
-	g_logger<<"[DEBUG]å¼€å§‹æ–‡ä»¶ä¸€è‡´æ€§æ£€æŸ¥..."<<std::endl;
+	g_logger<<"[DEBUG]¿ªÊ¼ÎÄ¼þÒ»ÖÂÐÔ¼ì²é..."<<std::endl;
 
 	for(const auto& fileInfo:fileManifest) {
 		std::string relativePath=fileInfo["path"].asString();
@@ -183,7 +183,7 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 		totalChecked++;
 
 		if(!std::filesystem::exists(fullPath)) {
-			g_logger<<"[INFO]æ–‡ä»¶ä¸å­˜åœ¨: "<<relativePath<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þ²»´æÔÚ: "<<relativePath<<std::endl;
 			allFilesConsistent=false;
 			missingFiles++;
 			continue;
@@ -191,19 +191,19 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 
 		std::string actualHash=FileHasher::CalculateFileHash(fullPath,hashAlgorithm);
 		if(actualHash.empty()) {
-			g_logger<<"[WARN]æ— æ³•è®¡ç®—æ–‡ä»¶å“ˆå¸Œ: "<<relativePath<<std::endl;
+			g_logger<<"[WARN]ÎÞ·¨¼ÆËãÎÄ¼þ¹þÏ£: "<<relativePath<<std::endl;
 			allFilesConsistent=false;
 			mismatchedFiles++;
 		}
 		else if(actualHash!=expectedHash) {
-			g_logger<<"[INFO]æ–‡ä»¶å“ˆå¸Œä¸åŒ¹é…: "<<relativePath<<std::endl;
-			g_logger<<"[INFO]æœŸæœ›: "<<expectedHash<<std::endl;
-			g_logger<<"[INFO]å®žé™…: "<<actualHash<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þ¹þÏ£²»Æ¥Åä: "<<relativePath<<std::endl;
+			g_logger<<"[INFO]ÆÚÍû: "<<expectedHash<<std::endl;
+			g_logger<<"[INFO]Êµ¼Ê: "<<actualHash<<std::endl;
 			allFilesConsistent=false;
 			mismatchedFiles++;
 		}
 		else {
-			g_logger<<"[DEBUG]æ–‡ä»¶ä¸€è‡´: "<<relativePath<<std::endl;
+			g_logger<<"[DEBUG]ÎÄ¼þÒ»ÖÂ: "<<relativePath<<std::endl;
 		}
 	}
 
@@ -212,13 +212,13 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 		std::string fullPath=gameDirectory+"/"+relativePath;
 
 		if(!std::filesystem::exists(fullPath)) {
-			g_logger<<"[INFO]ç›®å½•ä¸å­˜åœ¨: "<<relativePath<<std::endl;
+			g_logger<<"[INFO]Ä¿Â¼²»´æÔÚ: "<<relativePath<<std::endl;
 			allFilesConsistent=false;
 			missingFiles++;
 			continue;
 		}
 
-		// æ£€æŸ¥ç›®å½•å†…æ¯ä¸ªæ–‡ä»¶
+		// ¼ì²éÄ¿Â¼ÄÚÃ¿¸öÎÄ¼þ
 		const Json::Value& contents=dirInfo["contents"];
 		for(const auto& contentInfo:contents) {
 			std::string fileRelativePath=contentInfo["path"].asString();
@@ -228,7 +228,7 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 			totalChecked++;
 
 			if(!std::filesystem::exists(fileFullPath)) {
-				g_logger<<"[INFO]ç›®å½•å†…æ–‡ä»¶ä¸å­˜åœ¨: "<<fileRelativePath<<std::endl;
+				g_logger<<"[INFO]Ä¿Â¼ÄÚÎÄ¼þ²»´æÔÚ: "<<fileRelativePath<<std::endl;
 				allFilesConsistent=false;
 				missingFiles++;
 				continue;
@@ -236,33 +236,33 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 
 			std::string actualHash=FileHasher::CalculateFileHash(fileFullPath,hashAlgorithm);
 			if(actualHash.empty()) {
-				g_logger<<"[WARN]æ— æ³•è®¡ç®—ç›®å½•å†…æ–‡ä»¶å“ˆå¸Œ: "<<fileRelativePath<<std::endl;
+				g_logger<<"[WARN]ÎÞ·¨¼ÆËãÄ¿Â¼ÄÚÎÄ¼þ¹þÏ£: "<<fileRelativePath<<std::endl;
 				allFilesConsistent=false;
 				mismatchedFiles++;
 			}
 			else if(actualHash!=expectedHash) {
-				g_logger<<"[INFO]ç›®å½•å†…æ–‡ä»¶å“ˆå¸Œä¸åŒ¹é…: "<<fileRelativePath<<std::endl;
+				g_logger<<"[INFO]Ä¿Â¼ÄÚÎÄ¼þ¹þÏ£²»Æ¥Åä: "<<fileRelativePath<<std::endl;
 				allFilesConsistent=false;
 				mismatchedFiles++;
 			}
 			else {
-				g_logger<<"[DEBUG]ç›®å½•å†…æ–‡ä»¶ä¸€è‡´: "<<fileRelativePath<<std::endl;
+				g_logger<<"[DEBUG]Ä¿Â¼ÄÚÎÄ¼þÒ»ÖÂ: "<<fileRelativePath<<std::endl;
 			}
 		}
 	}
 
-	g_logger<<"[INFO]æ–‡ä»¶ä¸€è‡´æ€§æ£€æŸ¥å®Œæˆ:"<<std::endl;
-	g_logger<<"[INFO]  æ€»å…±æ£€æŸ¥: "<<totalChecked<<" ä¸ªæ–‡ä»¶"<<std::endl;
-	g_logger<<"[INFO]  ç¼ºå¤±æ–‡ä»¶: "<<missingFiles<<" ä¸ª"<<std::endl;
-	g_logger<<"[INFO]  ä¸åŒ¹é…æ–‡ä»¶: "<<mismatchedFiles<<" ä¸ª"<<std::endl;
-	g_logger<<"[INFO]  æ–‡ä»¶ä¸€è‡´æ€§: "<<(allFilesConsistent?"é€šè¿‡":"å¤±è´¥")<<std::endl;
+	g_logger<<"[INFO]ÎÄ¼þÒ»ÖÂÐÔ¼ì²éÍê³É:"<<std::endl;
+	g_logger<<"[INFO]  ×Ü¹²¼ì²é: "<<totalChecked<<" ¸öÎÄ¼þ"<<std::endl;
+	g_logger<<"[INFO]  È±Ê§ÎÄ¼þ: "<<missingFiles<<" ¸ö"<<std::endl;
+	g_logger<<"[INFO]  ²»Æ¥ÅäÎÄ¼þ: "<<mismatchedFiles<<" ¸ö"<<std::endl;
+	g_logger<<"[INFO]  ÎÄ¼þÒ»ÖÂÐÔ: "<<(allFilesConsistent?"Í¨¹ý":"Ê§°Ü")<<std::endl;
 
 	return allFilesConsistent;
 }
 
 bool MinecraftUpdater::ForceUpdate(bool forceSync) {
 	if(!enableApiCache) {
-		g_logger<<"[INFO]APIç¼“å­˜å·²ç¦ç”¨ï¼Œå¼ºåˆ¶é‡æ–°èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[INFO]API»º´æÒÑ½ûÓÃ£¬Ç¿ÖÆÖØÐÂ»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 		hasCachedUpdateInfo=false;
 		cachedUpdateInfo=Json::Value();
 	}
@@ -270,52 +270,52 @@ bool MinecraftUpdater::ForceUpdate(bool forceSync) {
 	Json::Value updateInfo;
 	if(hasCachedUpdateInfo) {
 		updateInfo=cachedUpdateInfo;
-		g_logger<<"[INFO]ä½¿ç”¨ç¼“å­˜çš„æ›´æ–°ä¿¡æ¯è¿›è¡Œæ›´æ–°"<<std::endl;
+		g_logger<<"[INFO]Ê¹ÓÃ»º´æµÄ¸üÐÂÐÅÏ¢½øÐÐ¸üÐÂ"<<std::endl;
 	}
 	else {
 		updateInfo=updateChecker.FetchUpdateInfo();
 	}
 
 	if(updateInfo.isNull()) {
-		g_logger<<"[ERROR]é”™è¯¯: æ— æ³•èŽ·å–æ›´æ–°ä¿¡æ¯"<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÎÞ·¨»ñÈ¡¸üÐÂÐÅÏ¢"<<std::endl;
 		return false;
 	}
 
 	std::string serverUpdateMode;
 	if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
 		serverUpdateMode=updateInfo["update_mode"].asString();
-		g_logger<<"[INFO]æœåŠ¡ç«¯å¼ºåˆ¶ä½¿ç”¨æ›´æ–°æ¨¡å¼: "<<serverUpdateMode<<std::endl;
+		g_logger<<"[INFO]·þÎñ¶ËÇ¿ÖÆÊ¹ÓÃ¸üÐÂÄ£Ê½: "<<serverUpdateMode<<std::endl;
 	}
 	else {
 		serverUpdateMode=configManager.ReadUpdateMode();
-		g_logger<<"[INFO]ä½¿ç”¨å®¢æˆ·ç«¯é…ç½®çš„æ›´æ–°æ¨¡å¼: "<<serverUpdateMode<<std::endl;
+		g_logger<<"[INFO]Ê¹ÓÃ¿Í»§¶ËÅäÖÃµÄ¸üÐÂÄ£Ê½: "<<serverUpdateMode<<std::endl;
 	}
 
 	std::string newVersion=updateInfo["version"].asString();
 
 	if(serverUpdateMode=="hash") {
-		g_logger<<"[INFO]å¼€å§‹æ›´æ–°åˆ°ç‰ˆæœ¬: "<<newVersion<<" (å“ˆå¸Œæ¨¡å¼)"<<std::endl;
+		g_logger<<"[INFO]¿ªÊ¼¸üÐÂµ½°æ±¾: "<<newVersion<<" (¹þÏ£Ä£Ê½)"<<std::endl;
 		if(SyncFilesByHash(updateInfo)) {
-			g_logger<<"[INFO]æ–‡ä»¶åŒæ­¥å®Œæˆï¼Œæ›´æ–°ç‰ˆæœ¬ä¿¡æ¯..."<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þÍ¬²½Íê³É£¬¸üÐÂ°æ±¾ÐÅÏ¢..."<<std::endl;
 			UpdateLocalVersion(newVersion);
-			g_logger<<"[INFO]æ›´æ–°å®Œæˆï¼"<<std::endl;
+			g_logger<<"[INFO]¸üÐÂÍê³É£¡"<<std::endl;
 			return true;
 		}
 		else {
-			g_logger<<"[ERROR]é”™è¯¯: æ›´æ–°è¿‡ç¨‹ä¸­å‡ºçŽ°é”™è¯¯ï¼"<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ¸üÐÂ¹ý³ÌÖÐ³öÏÖ´íÎó£¡"<<std::endl;
 			return false;
 		}
 	}
 	else {
-		g_logger<<"[INFO]å¼€å§‹æ›´æ–°åˆ°ç‰ˆæœ¬: "<<newVersion<<" (ç‰ˆæœ¬å·æ¨¡å¼)"<<std::endl;
+		g_logger<<"[INFO]¿ªÊ¼¸üÐÂµ½°æ±¾: "<<newVersion<<" (°æ±¾ºÅÄ£Ê½)"<<std::endl;
 
 		bool allSuccess=true;
 
 		Json::Value fileList=updateInfo["files"];
 		if(fileList.isArray()&&fileList.size()>0) {
-			g_logger<<"[INFO]å¤„ç†æ–‡ä»¶æ›´æ–°..."<<std::endl;
+			g_logger<<"[INFO]´¦ÀíÎÄ¼þ¸üÐÂ..."<<std::endl;
 			if(!SyncFiles(fileList,forceSync)) {
-				g_logger<<"[ERROR]é”™è¯¯: æ–‡ä»¶æ›´æ–°å¤±è´¥"<<std::endl;
+				g_logger<<"[ERROR]´íÎó: ÎÄ¼þ¸üÐÂÊ§°Ü"<<std::endl;
 				if(forceSync) return false;
 				allSuccess=false;
 			}
@@ -323,7 +323,7 @@ bool MinecraftUpdater::ForceUpdate(bool forceSync) {
 
 		Json::Value directoryList=updateInfo["directories"];
 		if(directoryList.isArray()&&directoryList.size()>0) {
-			g_logger<<"[INFO]å¤„ç†ç›®å½•æ›´æ–°..."<<std::endl;
+			g_logger<<"[INFO]´¦ÀíÄ¿Â¼¸üÐÂ..."<<std::endl;
 			for(const auto& dirInfo:directoryList) {
 				if(!dirInfo.isObject()) continue;
 
@@ -331,43 +331,43 @@ bool MinecraftUpdater::ForceUpdate(bool forceSync) {
 				std::string url=dirInfo["url"].asString();
 
 				if(path.empty()||url.empty()) {
-					g_logger<<"[ERROR]é”™è¯¯: ç›®å½•ä¿¡æ¯ä¸å®Œæ•´: path="<<path<<", url="<<url<<std::endl;
+					g_logger<<"[ERROR]´íÎó: Ä¿Â¼ÐÅÏ¢²»ÍêÕû: path="<<path<<", url="<<url<<std::endl;
 					if(forceSync) return false;
 					allSuccess=false;
 					continue;
 				}
 
-				g_logger<<"[INFO]æ›´æ–°ç›®å½•: "<<path<<std::endl;
+				g_logger<<"[INFO]¸üÐÂÄ¿Â¼: "<<path<<std::endl;
 				if(!DownloadAndExtract(url,path)) {
-					g_logger<<"[ERROR]é”™è¯¯: ç›®å½•æ›´æ–°å¤±è´¥: "<<path<<std::endl;
+					g_logger<<"[ERROR]´íÎó: Ä¿Â¼¸üÐÂÊ§°Ü: "<<path<<std::endl;
 					if(forceSync) return false;
 					allSuccess=false;
 				}
 				else {
-					g_logger<<"[INFO]ç›®å½•æ›´æ–°æˆåŠŸ: "<<path<<std::endl;
+					g_logger<<"[INFO]Ä¿Â¼¸üÐÂ³É¹¦: "<<path<<std::endl;
 				}
 			}
 		}
 
 		if(allSuccess) {
-			g_logger<<"[INFO]æ–‡ä»¶åŒæ­¥å®Œæˆï¼Œæ›´æ–°ç‰ˆæœ¬ä¿¡æ¯..."<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þÍ¬²½Íê³É£¬¸üÐÂ°æ±¾ÐÅÏ¢..."<<std::endl;
 			UpdateLocalVersion(newVersion);
-			g_logger<<"[INFO]æ›´æ–°å®Œæˆï¼"<<std::endl;
+			g_logger<<"[INFO]¸üÐÂÍê³É£¡"<<std::endl;
 			return true;
 		}
 		else {
-			g_logger<<"[ERROR]é”™è¯¯: æ›´æ–°è¿‡ç¨‹ä¸­å‡ºçŽ°é”™è¯¯ï¼"<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ¸üÐÂ¹ý³ÌÖÐ³öÏÖ´íÎó£¡"<<std::endl;
 			return false;
 		}
 	}
 }
 
 bool MinecraftUpdater::SyncFilesByHash(const Json::Value& updateInfo) {
-	g_logger<<"[INFO]å¼€å§‹å“ˆå¸Œæ¨¡å¼åŒæ­¥..."<<std::endl;
-	g_logger<<"[DEBUG]æ›´æ–°ä¿¡æ¯åŒ…å«fileså­—æ®µ: "<<updateInfo.isMember("files")<<std::endl;
-	g_logger<<"[DEBUG]æ›´æ–°ä¿¡æ¯åŒ…å«directorieså­—æ®µ: "<<updateInfo.isMember("directories")<<std::endl;
-	g_logger<<"[DEBUG]æ›´æ–°ä¿¡æ¯åŒ…å«file_manifestå­—æ®µ: "<<updateInfo.isMember("file_manifest")<<std::endl;
-	g_logger<<"[DEBUG]æ›´æ–°ä¿¡æ¯åŒ…å«directory_manifestå­—æ®µ: "<<updateInfo.isMember("directory_manifest")<<std::endl;
+	g_logger<<"[INFO]¿ªÊ¼¹þÏ£Ä£Ê½Í¬²½..."<<std::endl;
+	g_logger<<"[DEBUG]¸üÐÂÐÅÏ¢°üº¬files×Ö¶Î: "<<updateInfo.isMember("files")<<std::endl;
+	g_logger<<"[DEBUG]¸üÐÂÐÅÏ¢°üº¬directories×Ö¶Î: "<<updateInfo.isMember("directories")<<std::endl;
+	g_logger<<"[DEBUG]¸üÐÂÐÅÏ¢°üº¬file_manifest×Ö¶Î: "<<updateInfo.isMember("file_manifest")<<std::endl;
+	g_logger<<"[DEBUG]¸üÐÂÐÅÏ¢°üº¬directory_manifest×Ö¶Î: "<<updateInfo.isMember("directory_manifest")<<std::endl;
 
 	if(configManager.ReadEnableFileDeletion()) {
 		ProcessDeleteList(updateInfo["delete_list"]);
@@ -376,14 +376,14 @@ bool MinecraftUpdater::SyncFilesByHash(const Json::Value& updateInfo) {
 	Json::Value fileManifest=updateInfo["files"];
 	Json::Value directoryManifest=updateInfo["directories"];
 
-	g_logger<<"[DEBUG]æ–‡ä»¶æ¸…å•æ•°é‡: "<<fileManifest.size()<<std::endl;
-	g_logger<<"[DEBUG]ç›®å½•æ¸…å•æ•°é‡: "<<directoryManifest.size()<<std::endl;
+	g_logger<<"[DEBUG]ÎÄ¼þÇåµ¥ÊýÁ¿: "<<fileManifest.size()<<std::endl;
+	g_logger<<"[DEBUG]Ä¿Â¼Çåµ¥ÊýÁ¿: "<<directoryManifest.size()<<std::endl;
 
 	if(!UpdateFilesByHash(fileManifest,directoryManifest)) {
 		return false;
 	}
 
-	g_logger<<"[INFO]å“ˆå¸Œæ¨¡å¼åŒæ­¥å®Œæˆ"<<std::endl;
+	g_logger<<"[INFO]¹þÏ£Ä£Ê½Í¬²½Íê³É"<<std::endl;
 	return true;
 }
 
@@ -400,16 +400,16 @@ bool MinecraftUpdater::ProcessDeleteList(const Json::Value& deleteList) {
 			if(std::filesystem::exists(fullPath)) {
 				if(std::filesystem::is_directory(fullPath)) {
 					std::filesystem::remove_all(fullPath);
-					g_logger<<"[INFO]åˆ é™¤ç›®å½•: "<<path<<std::endl;
+					g_logger<<"[INFO]É¾³ýÄ¿Â¼: "<<path<<std::endl;
 				}
 				else {
 					std::filesystem::remove(fullPath);
-					g_logger<<"[INFO]åˆ é™¤æ–‡ä»¶: "<<path<<std::endl;
+					g_logger<<"[INFO]É¾³ýÎÄ¼þ: "<<path<<std::endl;
 				}
 			}
 		}
 		catch(const std::exception& e) {
-			g_logger<<"[WARN]åˆ é™¤å¤±è´¥: "<<path<<" - "<<e.what()<<std::endl;
+			g_logger<<"[WARN]É¾³ýÊ§°Ü: "<<path<<" - "<<e.what()<<std::endl;
 		}
 	}
 	return true;
@@ -419,8 +419,8 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
 	std::string hashAlgorithm=configManager.ReadHashAlgorithm();
 	bool allSuccess=true;
 
-	g_logger<<"[DEBUG]å¼€å§‹æ›´æ–°æ–‡ä»¶ï¼Œæ–‡ä»¶æ•°é‡: "<<fileManifest.size()<<std::endl;
-	g_logger<<"[DEBUG]æ¸¸æˆç›®å½•: "<<gameDirectory<<std::endl;
+	g_logger<<"[DEBUG]¿ªÊ¼¸üÐÂÎÄ¼þ£¬ÎÄ¼þÊýÁ¿: "<<fileManifest.size()<<std::endl;
+	g_logger<<"[DEBUG]ÓÎÏ·Ä¿Â¼: "<<gameDirectory<<std::endl;
 
 	for(const auto& fileInfo:fileManifest) {
 		std::string relativePath=fileInfo["path"].asString();
@@ -431,12 +431,12 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
 		std::filesystem::path fullPath=gameDirPath/relativePath;
 		std::string fullPathStr=fullPath.string();
 
-		g_logger<<"[DEBUG]å¤„ç†æ–‡ä»¶: "<<relativePath<<std::endl;
-		g_logger<<"[DEBUG]å®Œæ•´è·¯å¾„: "<<fullPathStr<<std::endl;
-		g_logger<<"[DEBUG]æ–‡ä»¶URL: "<<url<<std::endl;
+		g_logger<<"[DEBUG]´¦ÀíÎÄ¼þ: "<<relativePath<<std::endl;
+		g_logger<<"[DEBUG]ÍêÕûÂ·¾¶: "<<fullPathStr<<std::endl;
+		g_logger<<"[DEBUG]ÎÄ¼þURL: "<<url<<std::endl;
 
 		std::filesystem::path parentDir=fullPath.parent_path();
-		g_logger<<"[DEBUG]çˆ¶ç›®å½•: "<<parentDir.string()<<std::endl;
+		g_logger<<"[DEBUG]¸¸Ä¿Â¼: "<<parentDir.string()<<std::endl;
 		EnsureDirectoryExists(parentDir.string());
 
 		bool canWrite=false;
@@ -448,15 +448,15 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
 				testStream.close();
 				std::filesystem::remove(testFile);
 				canWrite=true;
-				g_logger<<"[DEBUG]ç›®å½•å†™å…¥æƒé™æ£€æŸ¥é€šè¿‡: "<<parentDir.string()<<std::endl;
+				g_logger<<"[DEBUG]Ä¿Â¼Ð´ÈëÈ¨ÏÞ¼ì²éÍ¨¹ý: "<<parentDir.string()<<std::endl;
 			}
 		}
 		catch(const std::exception& e) {
-			g_logger<<"[DEBUG]ç›®å½•å†™å…¥æƒé™æ£€æŸ¥å¤±è´¥: "<<e.what()<<std::endl;
+			g_logger<<"[DEBUG]Ä¿Â¼Ð´ÈëÈ¨ÏÞ¼ì²éÊ§°Ü: "<<e.what()<<std::endl;
 		}
 
 		if(!canWrite) {
-			g_logger<<"[ERROR]é”™è¯¯: ç›®å½•æ²¡æœ‰å†™å…¥æƒé™: "<<parentDir.string()<<std::endl;
+			g_logger<<"[ERROR]´íÎó: Ä¿Â¼Ã»ÓÐÐ´ÈëÈ¨ÏÞ: "<<parentDir.string()<<std::endl;
 			allSuccess=false;
 			continue;
 		}
@@ -464,39 +464,39 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
 		if(std::filesystem::exists(fullPath)) {
 			std::string actualHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
 			if(!actualHash.empty()&&actualHash==expectedHash) {
-				g_logger<<"[INFO]æ–‡ä»¶å·²æ˜¯æœ€æ–°: "<<relativePath<<std::endl;
+				g_logger<<"[INFO]ÎÄ¼þÒÑÊÇ×îÐÂ: "<<relativePath<<std::endl;
 				continue;
 			}
 		}
 
-		g_logger<<"[INFO]ä¸‹è½½æ–‡ä»¶: "<<relativePath<<std::endl;
+		g_logger<<"[INFO]ÏÂÔØÎÄ¼þ: "<<relativePath<<std::endl;
 		if(!httpClient.DownloadFile(url,fullPathStr)) {
-			g_logger<<"[ERROR]æ–‡ä»¶ä¸‹è½½å¤±è´¥: "<<relativePath<<std::endl;
+			g_logger<<"[ERROR]ÎÄ¼þÏÂÔØÊ§°Ü: "<<relativePath<<std::endl;
 
-			g_logger<<"[DEBUG]ç›®æ ‡è·¯å¾„: "<<fullPathStr<<std::endl;
-			g_logger<<"[DEBUG]çˆ¶ç›®å½•å­˜åœ¨: "<<std::filesystem::exists(parentDir)<<std::endl;
-			g_logger<<"[DEBUG]çˆ¶ç›®å½•å¯å†™: "<<canWrite<<std::endl;
+			g_logger<<"[DEBUG]Ä¿±êÂ·¾¶: "<<fullPathStr<<std::endl;
+			g_logger<<"[DEBUG]¸¸Ä¿Â¼´æÔÚ: "<<std::filesystem::exists(parentDir)<<std::endl;
+			g_logger<<"[DEBUG]¸¸Ä¿Â¼¿ÉÐ´: "<<canWrite<<std::endl;
 
 			allSuccess=false;
 		}
 		else {
-			g_logger<<"[INFO]æ–‡ä»¶ä¸‹è½½æˆåŠŸ: "<<relativePath<<std::endl;
+			g_logger<<"[INFO]ÎÄ¼þÏÂÔØ³É¹¦: "<<relativePath<<std::endl;
 
 			if(!expectedHash.empty()) {
 				std::string downloadedHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
 				if(downloadedHash!=expectedHash) {
-					g_logger<<"[WARN]æ–‡ä»¶å“ˆå¸ŒéªŒè¯å¤±è´¥: "<<relativePath<<std::endl;
-					g_logger<<"[WARN]æœŸæœ›: "<<expectedHash<<std::endl;
-					g_logger<<"[WARN]å®žé™…: "<<downloadedHash<<std::endl;
+					g_logger<<"[WARN]ÎÄ¼þ¹þÏ£ÑéÖ¤Ê§°Ü: "<<relativePath<<std::endl;
+					g_logger<<"[WARN]ÆÚÍû: "<<expectedHash<<std::endl;
+					g_logger<<"[WARN]Êµ¼Ê: "<<downloadedHash<<std::endl;
 				}
 				else {
-					g_logger<<"[INFO]æ–‡ä»¶å“ˆå¸ŒéªŒè¯æˆåŠŸ: "<<relativePath<<std::endl;
+					g_logger<<"[INFO]ÎÄ¼þ¹þÏ£ÑéÖ¤³É¹¦: "<<relativePath<<std::endl;
 				}
 			}
 		}
 	}
 
-	g_logger<<"[DEBUG]å¼€å§‹æ›´æ–°ç›®å½•ï¼Œç›®å½•æ•°é‡: "<<directoryManifest.size()<<std::endl;
+	g_logger<<"[DEBUG]¿ªÊ¼¸üÐÂÄ¿Â¼£¬Ä¿Â¼ÊýÁ¿: "<<directoryManifest.size()<<std::endl;
 	for(const auto& dirInfo:directoryManifest) {
 		if(!SyncDirectoryByHash(dirInfo)) {
 			allSuccess=false;
@@ -511,11 +511,11 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 	std::string url=dirInfo["url"].asString();
 	std::string hashAlgorithm=configManager.ReadHashAlgorithm();
 
-	g_logger<<"[INFO]åŒæ­¥ç›®å½•: "<<relativePath<<std::endl;
+	g_logger<<"[INFO]Í¬²½Ä¿Â¼: "<<relativePath<<std::endl;
 
 	std::vector<unsigned char> zipData;
 	if(!httpClient.DownloadToMemory(url,zipData)) {
-		g_logger<<"[ERROR]ç›®å½•ä¸‹è½½å¤±è´¥: "<<relativePath<<std::endl;
+		g_logger<<"[ERROR]Ä¿Â¼ÏÂÔØÊ§°Ü: "<<relativePath<<std::endl;
 		return false;
 	}
 
@@ -523,7 +523,7 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 	EnsureDirectoryExists(tempDir);
 
 	if(!ExtractZip(zipData,tempDir)) {
-		g_logger<<"[ERROR]è§£åŽ‹å¤±è´¥: "<<relativePath<<std::endl;
+		g_logger<<"[ERROR]½âÑ¹Ê§°Ü: "<<relativePath<<std::endl;
 		return false;
 	}
 
@@ -542,7 +542,7 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 		std::string targetFilePath=targetDir+"/"+fileRelativePath;
 
 		if(!std::filesystem::exists(tempFilePath)) {
-			g_logger<<"[WARN]è§£åŽ‹æ–‡ä»¶ä¸­ä¸å­˜åœ¨: "<<fileRelativePath<<std::endl;
+			g_logger<<"[WARN]½âÑ¹ÎÄ¼þÖÐ²»´æÔÚ: "<<fileRelativePath<<std::endl;
 			dirSuccess=false;
 			continue;
 		}
@@ -550,12 +550,12 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 		if(!expectedHash.empty()) {
 			std::string actualHash=FileHasher::CalculateFileHash(tempFilePath,hashAlgorithm);
 			if(actualHash!=expectedHash) {
-				g_logger<<"[WARN]è§£åŽ‹æ–‡ä»¶å“ˆå¸ŒéªŒè¯å¤±è´¥: "<<fileRelativePath<<std::endl;
-				g_logger<<"[WARN]æœŸæœ›: "<<expectedHash<<std::endl;
-				g_logger<<"[WARN]å®žé™…: "<<actualHash<<std::endl;
+				g_logger<<"[WARN]½âÑ¹ÎÄ¼þ¹þÏ£ÑéÖ¤Ê§°Ü: "<<fileRelativePath<<std::endl;
+				g_logger<<"[WARN]ÆÚÍû: "<<expectedHash<<std::endl;
+				g_logger<<"[WARN]Êµ¼Ê: "<<actualHash<<std::endl;
 			}
 			else {
-				g_logger<<"[DEBUG]è§£åŽ‹æ–‡ä»¶å“ˆå¸ŒéªŒè¯æˆåŠŸ: "<<fileRelativePath<<std::endl;
+				g_logger<<"[DEBUG]½âÑ¹ÎÄ¼þ¹þÏ£ÑéÖ¤³É¹¦: "<<fileRelativePath<<std::endl;
 			}
 		}
 
@@ -564,10 +564,10 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 		try {
 			std::filesystem::copy(tempFilePath,targetFilePath,
 				std::filesystem::copy_options::overwrite_existing);
-			g_logger<<"[INFO]æ›´æ–°æ–‡ä»¶: "<<fileRelativePath<<std::endl;
+			g_logger<<"[INFO]¸üÐÂÎÄ¼þ: "<<fileRelativePath<<std::endl;
 		}
 		catch(const std::exception& e) {
-			g_logger<<"[ERROR]æ–‡ä»¶å¤åˆ¶å¤±è´¥: "<<fileRelativePath<<" - "<<e.what()<<std::endl;
+			g_logger<<"[ERROR]ÎÄ¼þ¸´ÖÆÊ§°Ü: "<<fileRelativePath<<" - "<<e.what()<<std::endl;
 			dirSuccess=false;
 		}
 	}
@@ -580,7 +580,7 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 		std::filesystem::remove_all(tempDir);
 	}
 	catch(const std::exception& e) {
-		g_logger<<"[WARN]æ¸…ç†ä¸´æ—¶ç›®å½•å¤±è´¥: "<<e.what()<<std::endl;
+		g_logger<<"[WARN]ÇåÀíÁÙÊ±Ä¿Â¼Ê§°Ü: "<<e.what()<<std::endl;
 	}
 
 	return dirSuccess;
@@ -588,7 +588,7 @@ bool MinecraftUpdater::SyncDirectoryByHash(const Json::Value& dirInfo) {
 
 void MinecraftUpdater::CleanupOrphanedFiles(const std::string& directoryPath,const Json::Value& expectedContents) {
 	if(!expectedContents.isArray()) {
-		g_logger<<"[WARN]è­¦å‘Š: é¢„æœŸå†…å®¹ä¸æ˜¯æ•°ç»„ï¼Œè·³è¿‡æ¸…ç†å­¤å„¿æ–‡ä»¶"<<std::endl;
+		g_logger<<"[WARN]¾¯¸æ: Ô¤ÆÚÄÚÈÝ²»ÊÇÊý×é£¬Ìø¹ýÇåÀí¹Â¶ùÎÄ¼þ"<<std::endl;
 		return;
 	}
 	std::set<std::string> expectedFiles;
@@ -598,7 +598,7 @@ void MinecraftUpdater::CleanupOrphanedFiles(const std::string& directoryPath,con
 		expectedFiles.insert(path);
 	}
 
-	g_logger<<"[DEBUG]æœŸæœ›æ–‡ä»¶åˆ—è¡¨:"<<std::endl;
+	g_logger<<"[DEBUG]ÆÚÍûÎÄ¼þÁÐ±í:"<<std::endl;
 	for(const auto& file:expectedFiles) {
 		g_logger<<"[DEBUG]  - "<<file<<std::endl;
 	}
@@ -609,25 +609,25 @@ void MinecraftUpdater::CleanupOrphanedFiles(const std::string& directoryPath,con
 				std::string relativePath=std::filesystem::relative(entry.path(),directoryPath).string();
 				std::replace(relativePath.begin(),relativePath.end(),'\\','/');
 
-				g_logger<<"[DEBUG]æ£€æŸ¥æ–‡ä»¶: "<<relativePath<<std::endl;
+				g_logger<<"[DEBUG]¼ì²éÎÄ¼þ: "<<relativePath<<std::endl;
 
 				if(expectedFiles.find(relativePath)==expectedFiles.end()) {
 					try {
 						std::filesystem::remove(entry.path());
-						g_logger<<"[INFO]åˆ é™¤å­¤å„¿æ–‡ä»¶: "<<relativePath<<std::endl;
+						g_logger<<"[INFO]É¾³ý¹Â¶ùÎÄ¼þ: "<<relativePath<<std::endl;
 					}
 					catch(const std::exception& e) {
-						g_logger<<"[ERROR]åˆ é™¤å­¤å„¿æ–‡ä»¶å¤±è´¥: "<<relativePath<<" - "<<e.what()<<std::endl;
+						g_logger<<"[ERROR]É¾³ý¹Â¶ùÎÄ¼þÊ§°Ü: "<<relativePath<<" - "<<e.what()<<std::endl;
 					}
 				}
 				else {
-					g_logger<<"[DEBUG]æ–‡ä»¶åœ¨æœŸæœ›åˆ—è¡¨ä¸­ï¼Œä¿ç•™: "<<relativePath<<std::endl;
+					g_logger<<"[DEBUG]ÎÄ¼þÔÚÆÚÍûÁÐ±íÖÐ£¬±£Áô: "<<relativePath<<std::endl;
 				}
 			}
 		}
 	}
 	catch(const std::exception& e) {
-		g_logger<<"[ERROR]éåŽ†ç›®å½•å¤±è´¥: "<<directoryPath<<" - "<<e.what()<<std::endl;
+		g_logger<<"[ERROR]±éÀúÄ¿Â¼Ê§°Ü: "<<directoryPath<<" - "<<e.what()<<std::endl;
 	}
 }
 
@@ -635,7 +635,7 @@ void MinecraftUpdater::CleanupOrphanedFiles(const std::string& directoryPath,con
 void MinecraftUpdater::EnsureDirectoryExists(const std::string& path) {
 	try {
 		if(path.empty()) {
-			g_logger<<"[WARN]è­¦å‘Š: è·¯å¾„ä¸ºç©º"<<std::endl;
+			g_logger<<"[WARN]¾¯¸æ: Â·¾¶Îª¿Õ"<<std::endl;
 			return;
 		}
 
@@ -644,31 +644,31 @@ void MinecraftUpdater::EnsureDirectoryExists(const std::string& path) {
 		dirPath=std::filesystem::absolute(dirPath);
 
 		if(!std::filesystem::exists(dirPath)) {
-			g_logger<<"[INFO]åˆ›å»ºç›®å½•: "<<dirPath.string()<<std::endl;
+			g_logger<<"[INFO]´´½¨Ä¿Â¼: "<<dirPath.string()<<std::endl;
 			bool created=std::filesystem::create_directories(dirPath);
 
 			if(created) {
-				g_logger<<"[INFO]ç›®å½•åˆ›å»ºæˆåŠŸ: "<<dirPath.string()<<std::endl;
+				g_logger<<"[INFO]Ä¿Â¼´´½¨³É¹¦: "<<dirPath.string()<<std::endl;
 			}
 			else {
-				g_logger<<"[WARN]ç›®å½•å¯èƒ½å·²å­˜åœ¨: "<<dirPath.string()<<std::endl;
+				g_logger<<"[WARN]Ä¿Â¼¿ÉÄÜÒÑ´æÔÚ: "<<dirPath.string()<<std::endl;
 			}
 			if(!std::filesystem::exists(dirPath)) {
-				g_logger<<"[ERROR]é”™è¯¯: ç›®å½•åˆ›å»ºåŽä»ç„¶ä¸å­˜åœ¨: "<<dirPath.string()<<std::endl;
+				g_logger<<"[ERROR]´íÎó: Ä¿Â¼´´½¨ºóÈÔÈ»²»´æÔÚ: "<<dirPath.string()<<std::endl;
 			}
 			else if(!std::filesystem::is_directory(dirPath)) {
-				g_logger<<"[ERROR]é”™è¯¯: è·¯å¾„å­˜åœ¨ä½†ä¸æ˜¯ç›®å½•: "<<dirPath.string()<<std::endl;
+				g_logger<<"[ERROR]´íÎó: Â·¾¶´æÔÚµ«²»ÊÇÄ¿Â¼: "<<dirPath.string()<<std::endl;
 			}
 		}
 		else {
 			if(!std::filesystem::is_directory(dirPath)) {
-				g_logger<<"[ERROR]é”™è¯¯: è·¯å¾„å­˜åœ¨ä½†ä¸æ˜¯ç›®å½•: "<<dirPath.string()<<std::endl;
+				g_logger<<"[ERROR]´íÎó: Â·¾¶´æÔÚµ«²»ÊÇÄ¿Â¼: "<<dirPath.string()<<std::endl;
 			}
 		}
 	}
 	catch(const std::exception& e) {
-		g_logger<<"[ERROR]é”™è¯¯: åˆ›å»ºç›®å½•å¤±è´¥: "<<path<<" - "<<e.what()<<std::endl;
-		g_logger<<"[ERROR]è¯¦ç»†é”™è¯¯: "<<e.what()<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ´´½¨Ä¿Â¼Ê§°Ü: "<<path<<" - "<<e.what()<<std::endl;
+		g_logger<<"[ERROR]ÏêÏ¸´íÎó: "<<e.what()<<std::endl;
 	}
 }
 
@@ -687,18 +687,18 @@ bool MinecraftUpdater::BackupFile(const std::string& filePath) {
 			std::filesystem::copy(filePath,backupPath,
 				std::filesystem::copy_options::recursive|
 				std::filesystem::copy_options::overwrite_existing);
-			g_logger<<"[INFO]å¤‡ä»½ç›®å½•: "<<filePath<<" -> "<<backupPath<<std::endl;
+			g_logger<<"[INFO]±¸·ÝÄ¿Â¼: "<<filePath<<" -> "<<backupPath<<std::endl;
 		}
 		else {
 			std::filesystem::copy_file(filePath,backupPath,
 				std::filesystem::copy_options::overwrite_existing);
-			g_logger<<"[INFO]å¤‡ä»½æ–‡ä»¶: "<<filePath<<" -> "<<backupPath<<std::endl;
+			g_logger<<"[INFO]±¸·ÝÎÄ¼þ: "<<filePath<<" -> "<<backupPath<<std::endl;
 		}
 		return true;
 	}
 	catch(const std::exception& e) {
-		g_logger<<"[WARN]è­¦å‘Š: å¤‡ä»½å¤±è´¥: "<<filePath<<" - "<<e.what()<<std::endl;
-		g_logger<<"[WARN]è­¦å‘Š: å¤‡ä»½å¤±è´¥ï¼Œä½†ç»§ç»­æ›´æ–°è¿‡ç¨‹..."<<std::endl;
+		g_logger<<"[WARN]¾¯¸æ: ±¸·ÝÊ§°Ü: "<<filePath<<" - "<<e.what()<<std::endl;
+		g_logger<<"[WARN]¾¯¸æ: ±¸·ÝÊ§°Ü£¬µ«¼ÌÐø¸üÐÂ¹ý³Ì..."<<std::endl;
 		return false;
 	}
 }
@@ -709,11 +709,11 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 	std::string tempDir=std::filesystem::temp_directory_path().string();
 	std::string tempZip=tempDir+"/minecraft_update_temp.zip";
 
-	g_logger<<"[INFO]åˆ›å»ºä¸´æ—¶æ–‡ä»¶: "<<tempZip<<std::endl;
+	g_logger<<"[INFO]´´½¨ÁÙÊ±ÎÄ¼þ: "<<tempZip<<std::endl;
 
 	std::ofstream file(tempZip,std::ios::binary);
 	if(!file) {
-		g_logger<<"[ERROR]é”™è¯¯: æ— æ³•åˆ›å»ºä¸´æ—¶æ–‡ä»¶: "<<tempZip<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÎÞ·¨´´½¨ÁÙÊ±ÎÄ¼þ: "<<tempZip<<std::endl;
 		return false;
 	}
 	file.write(reinterpret_cast<const char*>(zipData.data()),zipData.size());
@@ -722,13 +722,13 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 	int err=0;
 	zip_t* zip=zip_open(tempZip.c_str(),0,&err);
 	if(!zip) {
-		g_logger<<"[ERROR]é”™è¯¯: æ— æ³•æ‰“å¼€ZIPæ–‡ä»¶: "<<tempZip<<"ï¼Œé”™è¯¯ç : "<<err<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÎÞ·¨´ò¿ªZIPÎÄ¼þ: "<<tempZip<<"£¬´íÎóÂë: "<<err<<std::endl;
 		std::filesystem::remove(tempZip);
 		return false;
 	}
 
 	zip_int64_t numEntries=zip_get_num_entries(zip,0);
-	g_logger<<"[INFO]å¼€å§‹è§£åŽ‹ "<<numEntries<<" ä¸ªæ–‡ä»¶åˆ°: "<<extractPath<<std::endl;
+	g_logger<<"[INFO]¿ªÊ¼½âÑ¹ "<<numEntries<<" ¸öÎÄ¼þµ½: "<<extractPath<<std::endl;
 
 	for(zip_int64_t i=0; i<numEntries; i++) {
 		const char* name=zip_get_name(zip,i,0);
@@ -743,7 +743,7 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 
 		zip_file_t* zfile=zip_fopen_index(zip,i,0);
 		if(!zfile) {
-			g_logger<<"[ERROR]é”™è¯¯: æ— æ³•è§£åŽ‹æ–‡ä»¶: "<<name<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ÎÞ·¨½âÑ¹ÎÄ¼þ: "<<name<<std::endl;
 			continue;
 		}
 
@@ -758,10 +758,10 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 				outFile.write(buffer,bytesRead);
 			}
 			outFile.close();
-			g_logger<<"[INFO]è§£åŽ‹æ–‡ä»¶: "<<name<<std::endl;
+			g_logger<<"[INFO]½âÑ¹ÎÄ¼þ: "<<name<<std::endl;
 		}
 		else {
-			g_logger<<"[ERROR]é”™è¯¯: æ— æ³•åˆ›å»ºæ–‡ä»¶: "<<fullPath<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ÎÞ·¨´´½¨ÎÄ¼þ: "<<fullPath<<std::endl;
 		}
 
 		zip_fclose(zfile);
@@ -769,29 +769,29 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 
 	zip_close(zip);
 	std::filesystem::remove(tempZip);
-	g_logger<<"[INFO]è§£åŽ‹å®Œæˆ: "<<extractPath<<std::endl;
+	g_logger<<"[INFO]½âÑ¹Íê³É: "<<extractPath<<std::endl;
 	return true;
 }
 
 bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::string& relativePath) {
 	std::vector<unsigned char> zipData;
 
-	g_logger<<"[INFO]ä¸‹è½½ç›®å½•: "<<url<<" -> "<<relativePath<<std::endl;
+	g_logger<<"[INFO]ÏÂÔØÄ¿Â¼: "<<url<<" -> "<<relativePath<<std::endl;
 
 	if(!httpClient.DownloadToMemory(url,zipData)) {
-		g_logger<<"[ERROR]é”™è¯¯: ä¸‹è½½å¤±è´¥: "<<url<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÏÂÔØÊ§°Ü: "<<url<<std::endl;
 		return false;
 	}
 
 	if(zipData.empty()) {
-		g_logger<<"[ERROR]é”™è¯¯: ä¸‹è½½çš„æ–‡ä»¶ä¸ºç©º: "<<url<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÏÂÔØµÄÎÄ¼þÎª¿Õ: "<<url<<std::endl;
 		return false;
 	}
 
 	std::filesystem::path gameDirPath=std::filesystem::absolute(gameDirectory);
 	std::string fullPath=(gameDirPath/relativePath).string();
 
-	g_logger<<"[DEBUG]å®Œæ•´ç›®æ ‡è·¯å¾„: "<<fullPath<<std::endl;
+	g_logger<<"[DEBUG]ÍêÕûÄ¿±êÂ·¾¶: "<<fullPath<<std::endl;
 
 	std::filesystem::path pathObj(fullPath);
 	if(pathObj.has_parent_path()) {
@@ -799,9 +799,9 @@ bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::stri
 	}
 
 	if(std::filesystem::exists(fullPath)) {
-		g_logger<<"[INFO]å¤‡ä»½åŽŸæœ‰ç›®å½•: "<<fullPath<<std::endl;
+		g_logger<<"[INFO]±¸·ÝÔ­ÓÐÄ¿Â¼: "<<fullPath<<std::endl;
 		if(!BackupFile(fullPath)) {
-			g_logger<<"[WARN]è­¦å‘Š: ç›®å½•å¤‡ä»½å¤±è´¥ï¼Œä½†ç»§ç»­æ›´æ–°..."<<std::endl;
+			g_logger<<"[WARN]¾¯¸æ: Ä¿Â¼±¸·ÝÊ§°Ü£¬µ«¼ÌÐø¸üÐÂ..."<<std::endl;
 		}
 	}
 
@@ -810,7 +810,7 @@ bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::stri
 
 bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
 	if(!fileList.isArray()) {
-		g_logger<<"[ERROR]é”™è¯¯: æ–‡ä»¶åˆ—è¡¨æ ¼å¼é”™è¯¯"<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ÎÄ¼þÁÐ±í¸ñÊ½´íÎó"<<std::endl;
 		return false;
 	}
 
@@ -826,7 +826,7 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
 		std::string type=fileInfo.isMember("type")?fileInfo["type"].asString():"file";
 
 		if(path.empty()||url.empty()) {
-			g_logger<<"[ERROR]é”™è¯¯: æ–‡ä»¶ä¿¡æ¯ä¸å®Œæ•´: path="<<path<<", url="<<url<<std::endl;
+			g_logger<<"[ERROR]´íÎó: ÎÄ¼þÐÅÏ¢²»ÍêÕû: path="<<path<<", url="<<url<<std::endl;
 			if(forceSync) return false;
 			allSuccess=false;
 			continue;
@@ -835,9 +835,9 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
 		std::string fullPath=gameDirectory+"/"+path;
 
 		if(type=="directory") {
-			g_logger<<"[INFO]æ›´æ–°ç›®å½•: "<<path<<std::endl;
+			g_logger<<"[INFO]¸üÐÂÄ¿Â¼: "<<path<<std::endl;
 			if(!DownloadAndExtract(url,path)) {
-				g_logger<<"[ERROR]é”™è¯¯: ç›®å½•æ›´æ–°å¤±è´¥: "<<path<<std::endl;
+				g_logger<<"[ERROR]´íÎó: Ä¿Â¼¸üÐÂÊ§°Ü: "<<path<<std::endl;
 				if(forceSync) return false;
 				allSuccess=false;
 			}
@@ -847,20 +847,20 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
 			EnsureDirectoryExists(outputDir);
 
 			if(std::filesystem::exists(fullPath)) {
-				g_logger<<"[INFO]å¤‡ä»½åŽŸæœ‰æ–‡ä»¶: "<<fullPath<<std::endl;
+				g_logger<<"[INFO]±¸·ÝÔ­ÓÐÎÄ¼þ: "<<fullPath<<std::endl;
 				if(!BackupFile(fullPath)) {
-					g_logger<<"[WARN]è­¦å‘Š: æ–‡ä»¶å¤‡ä»½å¤±è´¥ï¼Œä½†ç»§ç»­æ›´æ–°..."<<std::endl;
+					g_logger<<"[WARN]¾¯¸æ: ÎÄ¼þ±¸·ÝÊ§°Ü£¬µ«¼ÌÐø¸üÐÂ..."<<std::endl;
 				}
 			}
 
-			g_logger<<"[INFO]ä¸‹è½½æ–‡ä»¶: "<<url<<" -> "<<fullPath<<std::endl;
+			g_logger<<"[INFO]ÏÂÔØÎÄ¼þ: "<<url<<" -> "<<fullPath<<std::endl;
 			if(!httpClient.DownloadFile(url,fullPath)) {
-				g_logger<<"[ERROR]é”™è¯¯: æ–‡ä»¶æ›´æ–°å¤±è´¥: "<<path<<std::endl;
+				g_logger<<"[ERROR]´íÎó: ÎÄ¼þ¸üÐÂÊ§°Ü: "<<path<<std::endl;
 				if(forceSync) return false;
 				allSuccess=false;
 			}
 			else {
-				g_logger<<"[INFO]æ–‡ä»¶ä¸‹è½½æˆåŠŸ: "<<path<<std::endl;
+				g_logger<<"[INFO]ÎÄ¼þÏÂÔØ³É¹¦: "<<path<<std::endl;
 			}
 		}
 	}
@@ -870,11 +870,11 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
 
 void MinecraftUpdater::UpdateLocalVersion(const std::string& newVersion) {
 	if(configManager.WriteVersion(newVersion)) {
-		g_logger<<"[INFO]ç‰ˆæœ¬ä¿¡æ¯å·²æ›´æ–°ä¸º: "<<newVersion<<std::endl;
+		g_logger<<"[INFO]°æ±¾ÐÅÏ¢ÒÑ¸üÐÂÎª: "<<newVersion<<std::endl;
 		hasCachedUpdateInfo=false;
 		cachedUpdateInfo=Json::Value();
 	}
 	else {
-		g_logger<<"[ERROR]é”™è¯¯: æ›´æ–°ç‰ˆæœ¬ä¿¡æ¯å¤±è´¥"<<std::endl;
+		g_logger<<"[ERROR]´íÎó: ¸üÐÂ°æ±¾ÐÅÏ¢Ê§°Ü"<<std::endl;
 	}
 }

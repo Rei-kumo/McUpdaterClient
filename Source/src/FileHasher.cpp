@@ -1,4 +1,4 @@
-﻿#include "FileHasher.h"
+#include "FileHasher.h"
 #include <fstream>
 #include <filesystem>
 #include <sstream>
