@@ -31,41 +31,47 @@ jobs:
         cd build
         cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
-    - name: Build project with verbose output
+    - name: Build project
       run: |
         cd build
         cmake --build . --config Release --verbose
 
     - name: List all files in build directory
+      shell: cmd
       run: |
         cd build
-        echo "=== Listing all files in build directory ==="
+        echo === Listing all files in build directory ===
         dir /s
 
     - name: Check for executable in common locations
+      shell: cmd
       run: |
-        echo "=== Checking for executable in common locations ==="
+        echo === Checking for executable in common locations ===
         if exist "build\Release\MinecraftUpdater.exe" (
-          echo "Found at build\Release\MinecraftUpdater.exe"
+          echo Found at build\Release\MinecraftUpdater.exe
           copy "build\Release\MinecraftUpdater.exe" "MinecraftUpdater.exe"
         ) else if exist "build\bin\Release\MinecraftUpdater.exe" (
-          echo "Found at build\bin\Release\MinecraftUpdater.exe"
+          echo Found at build\bin\Release\MinecraftUpdater.exe
           copy "build\bin\Release\MinecraftUpdater.exe" "MinecraftUpdater.exe"
         ) else if exist "build\MinecraftUpdater.exe" (
-          echo "Found at build\MinecraftUpdater.exe"
+          echo Found at build\MinecraftUpdater.exe
           copy "build\MinecraftUpdater.exe" "MinecraftUpdater.exe"
+        ) else if exist "build\x64\Release\MinecraftUpdater.exe" (
+          echo Found at build\x64\Release\MinecraftUpdater.exe
+          copy "build\x64\Release\MinecraftUpdater.exe" "MinecraftUpdater.exe"
         ) else (
-          echo "Executable not found in common locations"
+          echo Executable not found in common locations
           exit 1
         )
 
     - name: Verify static linking
+      shell: cmd
       run: |
         if exist "MinecraftUpdater.exe" (
-          echo "=== Checking for external DLL dependencies ==="
-          dumpbin /dependents "MinecraftUpdater.exe" | findstr ".dll" && (echo "Found DLL dependencies" && exit 1) || echo "Static linking successful - no external DLLs"
+          echo === Checking for external DLL dependencies ===
+          dumpbin /dependents "MinecraftUpdater.exe" | findstr ".dll" && (echo Found DLL dependencies && exit 1) || echo Static linking successful - no external DLLs
         ) else (
-          echo "Executable not found for verification"
+          echo Executable not found for verification
           exit 1
         )
 
@@ -94,6 +100,6 @@ jobs:
         files: ./release/MinecraftUpdater.exe
         generate_release_notes: true
         draft: false
-        preredule: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
