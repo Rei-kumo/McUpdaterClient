@@ -6,9 +6,6 @@ on:
       - 'v*'
   workflow_dispatch:
 
-env:
-  VCPKG_TRIPLET: x64-windows-static
-
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -26,64 +23,36 @@ jobs:
         cd vcpkg
         .\bootstrap-vcpkg.bat -disableMetrics
         .\vcpkg integrate install
-        .\vcpkg install curl openssl jsoncpp libzip bzip2 zlib zstd --triplet $env:VCPKG_TRIPLET
+        .\vcpkg install curl:x64-windows-static openssl:x64-windows-static jsoncpp:x64-windows-static libzip:x64-windows-static bzip2:x64-windows-static zlib:x64-windows-static zstd:x64-windows-static
 
-    - name: Configure CMake with vcpkg
+    - name: Configure CMake
       run: |
         mkdir build
         cd build
         cmake .. `
+          -G "Visual Studio 17 2022" `
+          -A x64 `
           -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-          -DVCPKG_TARGET_TRIPLET=$env:VCPKG_TRIPLET `
-          -DCMAKE_BUILD_TYPE=Release
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
     - name: Build project
       run: |
         cd build
-        cmake --build . --config Release --parallel
+        cmake --build . --config Release --parallel /m
 
     - name: Verify static linking
       shell: cmd
       run: |
         cd build
-        if exist "bin\Release\MinecraftUpdater.exe" (
-          echo "Checking dependencies for bin\Release\MinecraftUpdater.exe"
-          dumpbin /dependents "bin\Release\MinecraftUpdater.exe" | findstr ".dll" || echo "No external DLL dependencies found - static linking successful!"
-        ) else if exist "bin\MinecraftUpdater.exe" (
-          echo "Checking dependencies for bin\MinecraftUpdater.exe"
-          dumpbin /dependents "bin\MinecraftUpdater.exe" | findstr ".dll" || echo "No external DLL dependencies found - static linking successful!"
-        ) else if exist "Release\MinecraftUpdater.exe" (
-          echo "Checking dependencies for Release\MinecraftUpdater.exe"
-          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" || echo "No external DLL dependencies found - static linking successful!"
-        )
-
-    - name: Find and copy binary
-      shell: cmd
-      run: |
-        cd build
-        if exist "bin\Release\MinecraftUpdater.exe" (
-          copy "bin\Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
-          echo "Found binary at bin\Release\MinecraftUpdater.exe"
-        ) else if exist "bin\MinecraftUpdater.exe" (
-          copy "bin\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
-          echo "Found binary at bin\MinecraftUpdater.exe"
-        ) else if exist "Release\MinecraftUpdater.exe" (
-          copy "Release\MinecraftUpdater.exe" ..\MinecraftUpdater.exe
-          echo "Found binary at Release\MinecraftUpdater.exe"
-        ) else if exist "MinecraftUpdater.exe" (
-          copy "MinecraftUpdater.exe" ..\MinecraftUpdater.exe
-          echo "Found binary at MinecraftUpdater.exe"
-        ) else (
-          echo "Error: MinecraftUpdater.exe not found!"
-          dir /s *.exe
-          exit 1
+        if exist "Release\MinecraftUpdater.exe" (
+          dumpbin /dependents "Release\MinecraftUpdater.exe" | findstr ".dll" && (echo "Found DLL dependencies" && exit 1) || echo "Static linking successful - no external DLLs!"
         )
 
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
         name: minecraft-updater-windows-static
-        path: MinecraftUpdater.exe
+        path: build/Release/MinecraftUpdater.exe
 
   create-release:
     needs: build-windows
@@ -97,13 +66,6 @@ jobs:
       with:
         name: minecraft-updater-windows-static
         path: ./release
-
-    - name: Display file info
-      run: |
-        echo "Release files:"
-        ls -la ./release/
-        echo "File size:"
-        du -h ./release/MinecraftUpdater.exe
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
