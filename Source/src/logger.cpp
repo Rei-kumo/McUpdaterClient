@@ -1,4 +1,4 @@
-#include "Logger.h"
+ï»¿#include "Logger.h"
 #include <filesystem>
 
 Logger g_logger;
@@ -19,14 +19,14 @@ bool Logger::Initialize(const std::string& filename) {
 
     logFile.open(filename,std::ios::app);
     if(!logFile.is_open()) {
-        std::cerr<<"[ERROR]ÎÞ·¨´ò¿ªÈÕÖ¾ÎÄ¼þ: "<<filename<<std::endl;
+        std::cerr<<"[ERROR]æ— æ³•æ‰“å¼€æ—¥å¿—æ–‡ä»¶: "<<filename<<std::endl;
         enabled=false;
         return false;
     }
 
     enabled=true;
     isNewLine=true;
-    *this<<"[INFO]=== McUpdaterClient ÈÕÖ¾¿ªÊ¼ ==="<<std::endl;
+    *this<<"[INFO]=== McUpdaterClient æ—¥å¿—å¼€å§‹ ==="<<std::endl;
     return true;
 }
 

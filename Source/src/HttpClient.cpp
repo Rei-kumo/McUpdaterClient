@@ -1,4 +1,4 @@
-#include "HttpClient.h"
+ï»¿#include "HttpClient.h"
 #include <iostream>
 #include <fstream>
 #include "Logger.h"
@@ -22,7 +22,7 @@ std::string HttpClient::Get(const std::string& url) {
 	std::string response;
 
 	if(!curl) {
-		g_logger<<"[ERROR]CURL³õÊ¼»¯Ê§°Ü"<<std::endl;
+		g_logger<<"[ERROR]CURLåˆå§‹åŒ–å¤±è´¥"<<std::endl;
 		return response;
 	}
 
@@ -32,7 +32,7 @@ std::string HttpClient::Get(const std::string& url) {
 
 	CURLcode res=curl_easy_perform(curl);
 	if(res!=CURLE_OK) {
-		g_logger<<"[ERROR]HTTPÇëÇóÊ§°Ü: "<<curl_easy_strerror(res)<<std::endl;
+		g_logger<<"[ERROR]HTTPè¯·æ±‚å¤±è´¥: "<<curl_easy_strerror(res)<<std::endl;
 		return "";
 	}
 
@@ -45,7 +45,7 @@ bool HttpClient::DownloadFile(const std::string& url,const std::string& outputPa
 	FILE* file=nullptr;
 	errno_t err=fopen_s(&file,outputPath.c_str(),"wb");
 	if(err!=0||!file) {
-		g_logger<<"[ERROR]ÎÞ·¨´´½¨ÎÄ¼þ: "<<outputPath<<std::endl;
+		g_logger<<"[ERROR]æ— æ³•åˆ›å»ºæ–‡ä»¶: "<<outputPath<<std::endl;
 		return false;
 	}
 
@@ -57,7 +57,7 @@ bool HttpClient::DownloadFile(const std::string& url,const std::string& outputPa
 	fclose(file);
 
 	if(res!=CURLE_OK) {
-		g_logger<<"[ERROR]ÏÂÔØÊ§°Ü:"<<curl_easy_strerror(res)<<std::endl;
+		g_logger<<"[ERROR]ä¸‹è½½å¤±è´¥:"<<curl_easy_strerror(res)<<std::endl;
 		return false;
 	}
 
@@ -74,7 +74,7 @@ bool HttpClient::DownloadToMemory(const std::string& url,std::vector<unsigned ch
 
 	CURLcode res=curl_easy_perform(curl);
 	if(res!=CURLE_OK) {
-		g_logger<<"[ERROR]ÏÂÔØµ½ÄÚ´æÊ§°Ü: "<<curl_easy_strerror(res)<<std::endl;
+		g_logger<<"[ERROR]ä¸‹è½½åˆ°å†…å­˜å¤±è´¥: "<<curl_easy_strerror(res)<<std::endl;
 		return false;
 	}
 	return true;
