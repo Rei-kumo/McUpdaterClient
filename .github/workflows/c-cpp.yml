@@ -14,9 +14,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1
-
     - name: Install dependencies with vcpkg
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
@@ -25,84 +22,42 @@ jobs:
         .\vcpkg integrate install
         .\vcpkg install curl:x64-windows-static openssl:x64-windows-static jsoncpp:x64-windows-static libzip:x64-windows-static bzip2:x64-windows-static zlib:x64-windows-static zstd:x64-windows-static
 
-    - name: Configure CMake
+    - name: Configure and build
       run: |
         mkdir build
         cd build
         cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
-
-    - name: Build project
-      run: |
-        cd build
         cmake --build . --config Release
 
     - name: Find and copy executable
-      shell: cmd
       run: |
-        echo === Searching for executable ===
+        echo "=== Searching for executable ==="
         cd build
         
-        if exist "Release\MinecraftUpdater.exe" (
-          echo Found at Release\MinecraftUpdater.exe
-          copy "Release\MinecraftUpdater.exe" "..\MinecraftUpdater.exe"
-        ) else if exist "bin\Release\MinecraftUpdater.exe" (
-          echo Found at bin\Release\MinecraftUpdater.exe
-          copy "bin\Release\MinecraftUpdater.exe" "..\MinecraftUpdater.exe"
-        ) else if exist "MinecraftUpdater.exe" (
-          echo Found at MinecraftUpdater.exe
-          copy "MinecraftUpdater.exe" "..\MinecraftUpdater.exe"
-        ) else if exist "x64\Release\MinecraftUpdater.exe" (
-          echo Found at x64\Release\MinecraftUpdater.exe
-          copy "x64\Release\MinecraftUpdater.exe" "..\MinecraftUpdater.exe"
-        ) else (
-          echo === Checking all locations ===
-          dir /s /b | findstr "MinecraftUpdater.exe" || echo MinecraftUpdater.exe not found
+        # 使用 PowerShell 语法查找文件
+        $exe = Get-ChildItem -Recurse -Filter "MinecraftUpdater.exe" | Select-Object -First 1
+        
+        if ($exe) {
+          echo "Found at $($exe.FullName)"
+          Copy-Item $exe.FullName "../MinecraftUpdater.exe"
+        } else {
+          echo "Executable not found"
+          echo "All files in build directory:"
+          Get-ChildItem -Recurse
           exit 1
-        )
+        }
 
-    - name: Verify file exists and check size
-      run: |
-        if exist "MinecraftUpdater.exe" (
-          echo === Executable found ===
-          dir "MinecraftUpdater.exe"
-          echo File size: 
-          (Get-Item "MinecraftUpdater.exe").Length
-        ) else (
-          echo === Executable not found ===
-          exit 1
-        )
-
-    - name: Check dependencies using alternative method
-      shell: powershell
+    - name: Verify file exists
       run: |
         if (Test-Path "MinecraftUpdater.exe") {
-          echo "=== Checking for common dependency DLLs ==="
-          
-          # 检查文件是否包含常见的动态库名称（这是一个简化的检查）
-          $content = Get-Content "MinecraftUpdater.exe" -Encoding Byte -ReadCount 0
-          $contentString = [System.Text.Encoding]::ASCII.GetString($content)
-          
-          $dllsFound = @()
-          
-          # 检查常见的依赖库名称
-          $commonDlls = @("libcurl", "libssl", "libcrypto", "jsoncpp", "libzip", "zlib", "bzip2", "zstd")
-          
-          foreach ($dll in $commonDlls) {
-            if ($contentString -match $dll) {
-              $dllsFound += $dll
-            }
-          }
-          
-          if ($dllsFound.Count -gt 0) {
-            echo "⚠️  Found references to: $($dllsFound -join ', ')"
-            echo "This might indicate dynamic linking, but could be false positives"
-          } else {
-            echo "✅ No obvious references to common DLLs found"
-          }
-          
-          echo "=== Basic static linking verification passed ==="
+          echo "=== Executable verification ==="
+          $file = Get-Item "MinecraftUpdater.exe"
+          echo "File: $($file.Name)"
+          echo "Size: $($file.Length) bytes"
+          echo "Path: $($file.FullName)"
+          echo "✅ Executable successfully created"
         } else {
-          echo "❌ Executable not found for verification"
+          echo "❌ Executable not found"
           exit 1
         }
 
