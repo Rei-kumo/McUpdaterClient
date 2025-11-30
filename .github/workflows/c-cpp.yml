@@ -14,9 +14,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Cache vcpkg
+      uses: actions/cache@v3
+      with:
+        path: vcpkg/installed
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', 'vcpkg/scripts/buildsystems/vcpkg.cmake') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
+
     - name: Install dependencies with vcpkg
       run: |
-        git clone https://github.com/Microsoft/vcpkg.git
+        if (!(Test-Path "vcpkg")) {
+          git clone https://github.com/Microsoft/vcpkg.git
+        }
         cd vcpkg
         .\bootstrap-vcpkg.bat -disableMetrics
         .\vcpkg integrate install
@@ -34,12 +44,11 @@ jobs:
         echo "=== Searching for executable ==="
         cd build
         
-        # 使用 PowerShell 语法查找文件
-        $exe = Get-ChildItem -Recurse -Filter "MinecraftUpdater.exe" | Select-Object -First 1
+        $exe = Get-ChildItem -Recurse -Filter "McUpdaterClient.exe" | Select-Object -First 1
         
         if ($exe) {
           echo "Found at $($exe.FullName)"
-          Copy-Item $exe.FullName "../MinecraftUpdater.exe"
+          Copy-Item $exe.FullName "../McUpdaterClient.exe"
         } else {
           echo "Executable not found"
           echo "All files in build directory:"
@@ -49,9 +58,9 @@ jobs:
 
     - name: Verify file exists
       run: |
-        if (Test-Path "MinecraftUpdater.exe") {
+        if (Test-Path "McUpdaterClient.exe") {
           echo "=== Executable verification ==="
-          $file = Get-Item "MinecraftUpdater.exe"
+          $file = Get-Item "McUpdaterClient.exe"
           echo "File: $($file.Name)"
           echo "Size: $($file.Length) bytes"
           echo "Path: $($file.FullName)"
@@ -64,8 +73,8 @@ jobs:
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
-        name: minecraft-updater-windows-static
-        path: MinecraftUpdater.exe
+        name: mc-updater-client-windows-static
+        path: McUpdaterClient.exe
 
   create-release:
     needs: build-windows
@@ -77,13 +86,13 @@ jobs:
     - name: Download artifact
       uses: actions/download-artifact@v4
       with:
-        name: minecraft-updater-windows-static
+        name: mc-updater-client-windows-static
         path: ./release
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./release/MinecraftUpdater.exe
+        files: ./release/McUpdaterClient.exe
         generate_release_notes: true
         draft: false
         prerelease: false

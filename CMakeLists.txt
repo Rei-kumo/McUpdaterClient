@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(MinecraftUpdater)
+project(McUpdaterClient)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -79,7 +79,7 @@ elseif(APPLE)
     add_compile_options(-Wall -Wextra -Wno-deprecated-declarations)
 endif()
 
-add_executable(MinecraftUpdater
+add_executable(McUpdaterClient
     ${SOURCE_DIR}/main.cpp
     ${SOURCE_DIR}/MinecraftUpdater.cpp
     ${SOURCE_DIR}/UpdateChecker.cpp
@@ -89,7 +89,7 @@ add_executable(MinecraftUpdater
     ${SOURCE_DIR}/logger.cpp
 )
 
-target_link_libraries(MinecraftUpdater
+target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -99,7 +99,7 @@ target_link_libraries(MinecraftUpdater
 )
 
 if(WIN32)
-    target_link_libraries(MinecraftUpdater
+    target_link_libraries(McUpdaterClient
         ws2_32
         crypt32
         advapi32
@@ -113,7 +113,7 @@ endif()
 if(APPLE)
     find_library(CORE_FOUNDATION CoreFoundation)
     find_library(SECURITY Security)
-    target_link_libraries(MinecraftUpdater 
+    target_link_libraries(McUpdaterClient 
         ${CORE_FOUNDATION} 
         ${SECURITY}
     )
@@ -122,7 +122,7 @@ endif()
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/config)
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/logs)
 
-add_custom_command(TARGET MinecraftUpdater POST_BUILD
+add_custom_command(TARGET McUpdaterClient POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory 
     ${CMAKE_SOURCE_DIR}/config
     COMMAND ${CMAKE_COMMAND} -E make_directory 

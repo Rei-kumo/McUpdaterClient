@@ -42,7 +42,7 @@ int main() {
         return 1;
     }
 
-    g_logger<<"[INFO]当前McUpdater版本:v0.0.2"<<std::endl;
+    g_logger<<"[INFO]当前McUpdaterClient版本:v0.0.2"<<std::endl;
     g_logger<<"[INFO]Made by Reikumo."<<std::endl;
     g_logger<<"[INFO]配置加载成功："<<std::endl;
     g_logger<<"[INFO]  游戏目录: "<<gameDir<<std::endl;
@@ -96,6 +96,6 @@ int main() {
         }
     }
 
-    g_logger<<"[INFO]=== McUpdater 日志结束 ==="<<std::endl;
+    g_logger<<"[INFO]=== McUpdaterClient 日志结束 ==="<<std::endl;
     return 0;
 }

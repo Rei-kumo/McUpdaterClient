@@ -14,7 +14,6 @@ Logger::~Logger() {
 bool Logger::Initialize(const std::string& filename) {
     logFileName=filename;
 
-    // 确保日志目录存在
     std::filesystem::path path(filename);
     std::filesystem::create_directories(path.parent_path());
 
@@ -27,7 +26,7 @@ bool Logger::Initialize(const std::string& filename) {
 
     enabled=true;
     isNewLine=true;
-    *this<<"[INFO]=== McUpdater 日志开始 ==="<<std::endl;
+    *this<<"[INFO]=== McUpdaterClient 日志开始 ==="<<std::endl;
     return true;
 }
 
