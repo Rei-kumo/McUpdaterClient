@@ -1,7 +1,6 @@
 #include "UpdateChecker.h"
 #include <iostream>
 #include <sstream>
-#include "Logger.h"
 
 UpdateChecker::UpdateChecker(const std::string& url,HttpClient& http,ConfigManager& config,bool apiCache)
     : updateUrl(url),httpClient(http),configManager(config),enableApiCache(apiCache) {
@@ -16,16 +15,16 @@ bool UpdateChecker::CheckForUpdates() {
     std::string localVersion=configManager.ReadVersion();
     std::string remoteVersion=updateInfo["version"].asString();
 
-    g_logger<<"[INFO]本地游戏版本: "<<localVersion<<std::endl;
-    g_logger<<"[INFO]远程游戏版本: "<<remoteVersion<<std::endl;
+    g_logger<<"[INFO] 本地游戏版本: "<<localVersion<<std::endl;
+    g_logger<<"[INFO] 远程游戏版本: "<<remoteVersion<<std::endl;
 
     if(remoteVersion>localVersion) {
-        g_logger<<"[INFO]发现新版本: "<<remoteVersion<<std::endl;
+        g_logger<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
         DisplayChangelog(updateInfo["changelog"]);
         return true;
     }
     else {
-        g_logger<<"[INFO]当前已是最新版本"<<std::endl;
+        g_logger<<"[INFO] 当前已是最新版本"<<std::endl;
         return false;
     }
 }

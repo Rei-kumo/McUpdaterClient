@@ -79,6 +79,7 @@ elseif(APPLE)
     add_compile_options(-Wall -Wextra -Wno-deprecated-declarations)
 endif()
 
+# 添加可执行文件 - 关键修改：新增了 SelfUpdater.cpp
 add_executable(McUpdaterClient
     ${SOURCE_DIR}/main.cpp
     ${SOURCE_DIR}/MinecraftUpdater.cpp
@@ -87,8 +88,10 @@ add_executable(McUpdaterClient
     ${SOURCE_DIR}/HttpClient.cpp
     ${SOURCE_DIR}/FileHasher.cpp
     ${SOURCE_DIR}/logger.cpp
+    ${SOURCE_DIR}/SelfUpdater.cpp  # 新增：自我更新模块
 )
 
+# 链接库
 target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}
     OpenSSL::SSL
@@ -98,6 +101,7 @@ target_link_libraries(McUpdaterClient
     ${BZIP2_LIBRARIES}
 )
 
+# Windows平台特定链接库 - 新增库用于自我更新功能
 if(WIN32)
     target_link_libraries(McUpdaterClient
         ws2_32
@@ -107,6 +111,8 @@ if(WIN32)
         iphlpapi
         normaliz
         wldap32
+        shell32  # 新增：用于ShellExecuteEx函数（自我更新需要）
+        version
     )
 endif()
 

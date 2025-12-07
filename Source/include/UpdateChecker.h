@@ -5,6 +5,7 @@
 #include <json/json.h>
 #include "HttpClient.h"
 #include "ConfigManager.h"
+#include "Logger.h"
 
 class UpdateChecker {
 private:
