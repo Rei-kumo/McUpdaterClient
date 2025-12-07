@@ -16,7 +16,6 @@ bool Logger::Initialize(const std::string& filename) {
 
     std::filesystem::path path(filename);
     std::filesystem::create_directories(path.parent_path());
-
     logFile.open(filename,std::ios::app);
     if(!logFile.is_open()) {
         std::cerr<<"[ERROR]无法打开日志文件: "<<filename<<std::endl;

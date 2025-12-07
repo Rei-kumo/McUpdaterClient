@@ -220,7 +220,7 @@ Json::Value ConfigManager::CreateDefaultConfig(){
     config["enable_file_deletion"]=true;
     config["skip_major_version_check"]=false;
     config["enable_api_cache"]=true;
-    config["api_timeout"]=60;
+    config["api_timeout"]=600;
     return config;
 }
 

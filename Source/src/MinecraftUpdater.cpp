@@ -8,6 +8,171 @@
 #include <set>
 #include "SelfUpdater.h"
 #include <thread>
+#include <iomanip>
+#include <sstream>
+#include <queue>
+#include <map>
+#include <algorithm>
+#include <mutex>
+static void ClearConsoleLine() {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if(GetConsoleScreenBufferInfo(hConsole,&csbi)) {
+        int columns=csbi.srWindow.Right-csbi.srWindow.Left+1;
+        DWORD charsWritten;
+
+        COORD cursorPos=csbi.dwCursorPosition;
+        cursorPos.X=0;
+
+        FillConsoleOutputCharacter(hConsole,' ',columns,cursorPos,&charsWritten);
+        SetConsoleCursorPosition(hConsole,cursorPos);
+    }
+}
+
+static std::string FormatBytes(long long bytes) {
+    if(bytes<0) bytes=0;
+
+    const char* units[]={"B","KB","MB","GB","TB"};
+    int unitIndex=0;
+    double size=static_cast<double>(bytes);
+
+    while(size>=1024.0&&unitIndex<4) {
+        size/=1024.0;
+        unitIndex++;
+    }
+
+    std::stringstream ss;
+
+    if(bytes==0) {
+        ss<<"0.0 B";
+    }
+    else if(bytes==1) {
+        ss<<"1.0 B";
+    }
+    else {
+        if(unitIndex==0) {
+            ss<<std::fixed<<std::setprecision(0)<<size<<" "<<units[unitIndex];
+        }
+        else if(size<10.0) {
+            ss<<std::fixed<<std::setprecision(1)<<size<<" "<<units[unitIndex];
+        }
+        else {
+            ss<<std::fixed<<std::setprecision(0)<<size<<" "<<units[unitIndex];
+        }
+    }
+
+    return ss.str();
+}
+
+void MinecraftUpdater::DownloadProgressCallback(long long downloaded,long long total,void* userdata) {
+    MinecraftUpdater* updater=static_cast<MinecraftUpdater*>(userdata);
+    if(updater) {
+        updater->ShowProgressBar("下载",downloaded,total);
+    }
+}
+
+void MinecraftUpdater::ShowProgressBar(const std::string& operation,long long current,long long total) {
+    static std::mutex progressMutex;
+    std::lock_guard<std::mutex> lock(progressMutex);
+
+    static auto lastUpdateTime=std::chrono::steady_clock::now();
+    static long long lastCurrent=0;
+    auto now=std::chrono::steady_clock::now();
+    auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(now-lastUpdateTime).count();
+
+    bool shouldUpdate=false;
+
+    if(elapsed>=200) {
+        shouldUpdate=true;
+    }
+    else if(total>0) {
+        float lastProgress=static_cast<float>(lastCurrent)/total;
+        float currentProgress=static_cast<float>(current)/total;
+        if(fabs(currentProgress-lastProgress)>=0.01f) {
+            shouldUpdate=true;
+        }
+    }
+    else if(current!=lastCurrent) {
+        shouldUpdate=true;
+    }
+
+    if(!shouldUpdate&&current<total) {
+        return;
+    }
+
+    lastUpdateTime=now;
+    lastCurrent=current;
+
+
+    std::cout<<"\r  ";
+
+    const int barWidth=40;
+
+    if(total<=0) {
+        static int dotCount=0;
+        dotCount=(dotCount+1)%4;
+        std::string dots(dotCount,'.');
+
+        std::string currentStr=FormatBytes(current);
+
+        std::string line="进度: "+currentStr+" 已下载"+dots;
+
+        if(line.length()<60) {
+            line.append(60-line.length(),' ');
+        }
+
+        std::cout<<line;
+    }
+    else {
+
+        float progress=static_cast<float>(current)/total;
+        if(progress<0.0f) progress=0.0f;
+        if(progress>1.0f) progress=1.0f;
+
+        int pos=static_cast<int>(barWidth*progress);
+
+
+        std::string bar="[";
+        for(int i=0; i<barWidth; ++i) {
+            if(i<pos) bar+="=";
+            else if(i==pos) bar+=">";
+            else bar+=" ";
+        }
+        bar+="]";
+
+        std::stringstream ss;
+        ss<<"进度: "<<bar<<" "
+            <<std::fixed<<std::setprecision(1)<<(progress*100.0)<<"%";
+
+        ss<<" ("<<FormatBytes(current)<<"/"<<FormatBytes(total)<<")";
+
+        std::string line=ss.str();
+
+        if(line.length()<70) {
+            line.append(70-line.length(),' ');
+        }
+
+        std::cout<<line;
+    }
+
+    std::cout.flush();
+}
+void MinecraftUpdater::ClearProgressLine() {
+    const int consoleWidth=80;
+    std::cout<<"\r";
+    for(int i=0; i<consoleWidth; i++) {
+        std::cout<<" ";
+    }
+    std::cout<<"\r";
+    std::cout.flush();
+}
+int MinecraftUpdater::GetDownloadTimeoutForSize(long long fileSize) {
+    int baseTimeout=60;
+    int additionalTime=static_cast<int>((fileSize/(10*1024*1024))*30);
+    int totalTimeout=baseTimeout+additionalTime;
+    return (totalTimeout>600)?600:totalTimeout;
+}
 
 MinecraftUpdater::MinecraftUpdater(const std::string& config,const std::string& url,const std::string& gameDir)
     : configManager(config),
@@ -102,7 +267,18 @@ bool MinecraftUpdater::CheckForUpdates() {
         return CheckForUpdatesByHash();
     }
     else {
-        return updateChecker.CheckForUpdates();
+        std::string localVersion=configManager.ReadVersion();
+        std::string remoteVersion=updateInfo["version"].asString();
+
+        if(remoteVersion>localVersion) {
+            g_logger<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
+            updateChecker.DisplayChangelog(updateInfo["changelog"]);
+            return true;
+        }
+        else {
+            g_logger<<"[INFO] 当前已是最新版本"<<std::endl;
+            return false;
+        }
     }
 }
 
@@ -417,6 +593,7 @@ bool MinecraftUpdater::ForceUpdate(bool forceSync) {
     }
 
     std::string newVersion=updateInfo["version"].asString();
+    std::string localVersion=configManager.ReadVersion();
 
     if(serverUpdateMode=="hash") {
         g_logger<<"[INFO] 开始更新到版本: "<<newVersion<<" (哈希模式)"<<std::endl;
@@ -432,6 +609,25 @@ bool MinecraftUpdater::ForceUpdate(bool forceSync) {
     }
     else {
         g_logger<<"[INFO] 开始更新到版本: "<<newVersion<<" (版本号模式)"<<std::endl;
+        bool useIncremental=false;
+        if(updateInfo.isMember("incremental_packages")&&
+            updateInfo["incremental_packages"].isArray()&&
+            updateInfo["incremental_packages"].size()>0) {
+
+            if(ShouldUseIncrementalUpdate(localVersion,newVersion)) {
+                useIncremental=true;
+                g_logger<<"[INFO] 检测到增量更新包，使用增量更新模式"<<std::endl;
+
+                if(ApplyIncrementalUpdate(updateInfo,localVersion,newVersion)) {
+                    g_logger<<"[INFO] 增量更新完成，更新版本信息..."<<std::endl;
+                    UpdateLocalVersion(newVersion);
+                    return true;
+                }
+                else {
+                    g_logger<<"[WARN] 增量更新失败，回退到全量更新"<<std::endl;
+                }
+            }
+        }
 
         bool allSuccess=true;
 
@@ -542,24 +738,32 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
     std::string hashAlgorithm=configManager.ReadHashAlgorithm();
     bool allSuccess=true;
 
-    g_logger<<"[DEBUG] 开始更新文件，文件数量: "<<fileManifest.size()<<std::endl;
-    g_logger<<"[DEBUG] 游戏目录: "<<gameDirectory<<std::endl;
+    int totalFiles=fileManifest.size();
+    int currentFile=0;
+
+    std::cout<<std::endl;
 
     for(const auto& fileInfo:fileManifest) {
+        currentFile++;
         std::string relativePath=fileInfo["path"].asString();
         std::string expectedHash=fileInfo["hash"].asString();
         std::string url=fileInfo["url"].asString();
+
+        std::cout<<"["<<currentFile<<"/"<<totalFiles<<"] 下载: "<<relativePath<<std::endl;
+        std::string fileInfoStr="["+std::to_string(currentFile)+"/"+
+            std::to_string(totalFiles)+"] 下载: "+relativePath;
+        int padding=80-(int)fileInfoStr.length();
+        if(padding>0) {
+            std::cout<<std::string(padding,' ');
+        }
+        std::cout<<std::endl;
+        std::cout.flush();
 
         std::filesystem::path gameDirPath=std::filesystem::absolute(gameDirectory);
         std::filesystem::path fullPath=gameDirPath/relativePath;
         std::string fullPathStr=fullPath.string();
 
-        g_logger<<"[DEBUG] 处理文件: "<<relativePath<<std::endl;
-        g_logger<<"[DEBUG] 完整路径: "<<fullPathStr<<std::endl;
-        g_logger<<"[DEBUG] 文件URL: "<<url<<std::endl;
-
         std::filesystem::path parentDir=fullPath.parent_path();
-        g_logger<<"[DEBUG] 父目录: "<<parentDir.string()<<std::endl;
         EnsureDirectoryExists(parentDir.string());
 
         bool canWrite=false;
@@ -580,6 +784,7 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
 
         if(!canWrite) {
             g_logger<<"[ERROR] 错误: 目录没有写入权限: "<<parentDir.string()<<std::endl;
+            std::cout<<"  [权限错误]"<<std::endl;
             allSuccess=false;
             continue;
         }
@@ -588,41 +793,75 @@ bool MinecraftUpdater::UpdateFilesByHash(const Json::Value& fileManifest,const J
             std::string actualHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
             if(!actualHash.empty()&&actualHash==expectedHash) {
                 g_logger<<"[INFO] 文件已是最新: "<<relativePath<<std::endl;
+                std::cout<<"  [已是最新]"<<std::endl;
                 continue;
             }
         }
 
-        g_logger<<"[INFO] 下载文件: "<<relativePath<<std::endl;
-        if(!httpClient.DownloadFile(url,fullPathStr)) {
-            g_logger<<"[ERROR] 文件下载失败: "<<relativePath<<std::endl;
-
-            g_logger<<"[DEBUG] 目标路径: "<<fullPathStr<<std::endl;
-            g_logger<<"[DEBUG] 父目录存在: "<<std::filesystem::exists(parentDir)<<std::endl;
-            g_logger<<"[DEBUG] 父目录可写: "<<canWrite<<std::endl;
-
-            allSuccess=false;
+        if(fileInfo.isMember("size")) {
+            long long fileSize=fileInfo["size"].asInt64();
+            int timeout=GetDownloadTimeoutForSize(fileSize);
+            httpClient.SetDownloadTimeout(timeout);
+            g_logger<<"[DEBUG] 设置文件下载超时: "<<timeout<<"秒 (大小: "<<FormatBytes(fileSize)<<")"<<std::endl;
         }
-        else {
-            g_logger<<"[INFO] 文件下载成功: "<<relativePath<<std::endl;
 
-            if(!expectedHash.empty()) {
-                std::string downloadedHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
-                if(downloadedHash!=expectedHash) {
-                    g_logger<<"[WARN] 文件哈希验证失败: "<<relativePath<<std::endl;
-                    g_logger<<"[WARN] 期望: "<<expectedHash<<std::endl;
-                    g_logger<<"[WARN] 实际: "<<downloadedHash<<std::endl;
-                }
-                else {
-                    g_logger<<"[INFO] 文件哈希验证成功: "<<relativePath<<std::endl;
-                }
+        std::string progressMessage="进度";
+
+        ShowProgressBar(progressMessage,0,1);
+
+        bool downloadSuccess=false;
+        long long fileSize=0;
+
+        if(fileInfo.isMember("size")) {
+            fileSize=fileInfo["size"].asInt64();
+        }
+
+        auto progressCallback=[this,progressMessage,fileSize](long long downloaded,long long total,void* userdata) {
+            if(total<=0&&fileSize>0) {
+                ShowProgressBar(progressMessage,downloaded,fileSize);
+            }
+            else {
+                ShowProgressBar(progressMessage,downloaded,total);
+            }
+            };
+
+        if(fileSize>0) {
+            int timeout=GetDownloadTimeoutForSize(fileSize);
+            httpClient.SetDownloadTimeout(timeout);
+        }
+
+        downloadSuccess=httpClient.DownloadFileWithProgress(
+            url,
+            fullPathStr,
+            progressCallback,
+            nullptr
+        );
+
+        ClearProgressLine();
+
+        httpClient.SetDownloadTimeout(0);
+
+        if(!downloadSuccess) {
+            std::cout<<"  [失败]"<<std::endl;
+            allSuccess=false;
+            continue;
+        }
+
+        std::error_code ec;
+        auto actualSize=std::filesystem::file_size(fullPathStr,ec);
+        std::string sizeStr=ec?"未知大小":FormatBytes(actualSize);
+
+        if(!expectedHash.empty()) {
+            std::string downloadedHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
+            if(downloadedHash!=expectedHash) {
+                std::cout<<"  [完成，大小: "<<sizeStr<<"，但哈希不匹配]"<<std::endl;
+            }
+            else {
+                std::cout<<"  [完成，大小: "<<sizeStr<<"，已验证]"<<std::endl;
             }
         }
-    }
-
-    g_logger<<"[DEBUG] 开始更新目录，目录数量: "<<directoryManifest.size()<<std::endl;
-    for(const auto& dirInfo:directoryManifest) {
-        if(!SyncDirectoryByHash(dirInfo)) {
-            allSuccess=false;
+        else {
+            std::cout<<"  [完成，大小: "<<sizeStr<<"]"<<std::endl;
         }
     }
 
@@ -899,10 +1138,20 @@ bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::stri
 
     g_logger<<"[INFO] 下载目录: "<<url<<" -> "<<relativePath<<std::endl;
 
-    if(!httpClient.DownloadToMemory(url,zipData)) {
+    std::string progressMessage="下载目录 "+relativePath;
+    ShowProgressBar(progressMessage,0,1);
+
+    if(!httpClient.DownloadToMemoryWithProgress(url,zipData,
+        [this,progressMessage](long long downloaded,long long total,void* userdata){
+            ShowProgressBar(progressMessage,downloaded,total);
+        },nullptr)) {
+
+        ClearProgressLine();
         g_logger<<"[ERROR] 错误: 下载失败: "<<url<<std::endl;
         return false;
     }
+
+    ClearProgressLine();
 
     if(zipData.empty()) {
         g_logger<<"[ERROR] 错误: 下载的文件为空: "<<url<<std::endl;
@@ -975,12 +1224,36 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
             }
 
             g_logger<<"[INFO] 下载文件: "<<url<<" -> "<<fullPath<<std::endl;
-            if(!httpClient.DownloadFile(url,fullPath)) {
-                g_logger<<"[ERROR] 错误: 文件更新失败: "<<path<<std::endl;
+
+            long long expectedSize=0;
+            if(fileInfo.isMember("size")) {
+                expectedSize=fileInfo["size"].asInt64();
+                g_logger<<"[DEBUG] 期望文件大小: "<<::FormatBytes(expectedSize)<<std::endl;
+            }
+
+            std::string progressMessage="下载 "+path;
+            if(expectedSize>0) {
+                ShowProgressBar(progressMessage,0,expectedSize);
+            }
+            else {
+                ShowProgressBar(progressMessage,0,1);
+            }
+
+            if(!httpClient.DownloadFileWithProgress(url,fullPath,
+                [this,progressMessage,expectedSize](long long downloaded,long long total,void* userdata) {
+                    if(total<=0&&expectedSize>0) {
+                        total=expectedSize;
+                    }
+                    ShowProgressBar(progressMessage,downloaded,total);
+                },nullptr)) {
+
+                ClearProgressLine();
+                g_logger<<"[ERROR] 错误: 文件下载失败: "<<path<<std::endl;
                 if(forceSync) return false;
                 allSuccess=false;
             }
             else {
+                ClearProgressLine();
                 g_logger<<"[INFO] 文件下载成功: "<<path<<std::endl;
             }
         }
@@ -998,4 +1271,361 @@ void MinecraftUpdater::UpdateLocalVersion(const std::string& newVersion) {
     else {
         g_logger<<"[ERROR] 错误: 更新版本信息失败"<<std::endl;
     }
+}
+
+bool MinecraftUpdater::ShouldUseIncrementalUpdate(const std::string& localVersion,const std::string& remoteVersion) {
+    if(localVersion>=remoteVersion) {
+        return false;
+    }
+
+    std::regex versionRegex(R"((\d+)\.(\d+)\.(\d+))");
+    std::smatch localMatch,remoteMatch;
+
+    if(!std::regex_match(localVersion,localMatch,versionRegex)||
+        !std::regex_match(remoteVersion,remoteMatch,versionRegex)) {
+        g_logger<<"[WARN] 版本号格式不正确，跳过增量更新"<<std::endl;
+        return false;
+    }
+
+    int localMajor=std::stoi(localMatch[1]);
+    int remoteMajor=std::stoi(remoteMatch[1]);
+
+    if(localMajor!=remoteMajor) {
+        g_logger<<"[INFO] 检测到主要版本变更 ("<<localVersion<<" -> "<<remoteVersion<<")，建议使用全量更新"<<std::endl;
+    }
+
+    return true;
+}
+
+bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,const std::string& localVersion,const std::string& remoteVersion) {
+    const Json::Value& packages=updateInfo["incremental_packages"];
+    std::string hashAlgorithm=configManager.ReadHashAlgorithm();
+
+    if(!packages.isArray()||packages.size()==0) {
+        g_logger<<"[INFO] 没有可用的增量更新包"<<std::endl;
+        return false;
+    }
+
+    g_logger<<"[INFO] 开始处理增量更新: "<<localVersion<<" -> "<<remoteVersion<<std::endl;
+
+    std::vector<std::string> packagePaths=GetUpdatePackagePath(packages,localVersion,remoteVersion);
+
+    if(packagePaths.empty()) {
+        g_logger<<"[INFO] 没有找到合适的增量更新包路径"<<std::endl;
+        return false;
+    }
+
+    g_logger<<"[INFO] 需要应用 "<<packagePaths.size()<<" 个更新包"<<std::endl;
+
+    for(size_t i=0; i<packagePaths.size(); i++) {
+        const std::string& packagePath=packagePaths[i];
+        g_logger<<"[INFO] ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理更新包: "<<packagePath<<std::endl;
+
+        std::string expectedHash;
+        long long expectedSize=0;
+        for(const auto& package:packages) {
+            if(package["archive"].asString()==packagePath) {
+                if(package.isMember("hash")) {
+                    expectedHash=package["hash"].asString();
+                }
+                if(package.isMember("size")) {
+                    expectedSize=package["size"].asInt64();
+                }
+                break;
+            }
+        }
+        if(expectedSize>0) {
+            int downloadTimeout=GetDownloadTimeoutForSize(expectedSize);
+            httpClient.SetDownloadTimeout(downloadTimeout);
+            g_logger<<"[DEBUG] 设置下载超时: "<<downloadTimeout<<"秒 (文件大小: "<<FormatBytes(expectedSize)<<")"<<std::endl;
+        }
+        else {
+            httpClient.SetDownloadTimeout(300);
+        }
+        std::string tempZip=std::filesystem::temp_directory_path().string()+"/mc_update_"+std::to_string(i)+".zip";
+
+        g_logger<<"[INFO] 开始下载更新包..."<<std::endl;
+
+        if(!httpClient.DownloadFileWithProgress(packagePath,tempZip,
+            DownloadProgressCallback,this)) {
+            g_logger<<std::endl<<"[ERROR] 下载更新包失败: "<<packagePath<<std::endl;
+
+            if(std::filesystem::exists(tempZip)) {
+                std::filesystem::remove(tempZip);
+            }
+
+            httpClient.SetDownloadTimeout(0);
+            return false;
+        }
+        ClearProgressLine();
+        g_logger<<"[INFO] 下载完成"<<std::endl;
+        if(expectedSize>0) {
+            std::error_code ec;
+            auto actualSize=std::filesystem::file_size(tempZip,ec);
+            if(!ec&&actualSize!=expectedSize) {
+                g_logger<<"[WARN] 文件大小不匹配: 期望 "<<FormatBytes(expectedSize)<<", 实际 "<<FormatBytes(actualSize)<<std::endl;
+            }
+        }
+        if(!expectedHash.empty()) {
+            g_logger<<"[INFO] 验证文件哈希..."<<std::endl;
+
+            std::string actualHash=FileHasher::CalculateFileHash(tempZip,hashAlgorithm);
+            if(actualHash!=expectedHash) {
+                g_logger<<"[ERROR] 更新包哈希验证失败: "<<packagePath<<std::endl;
+                g_logger<<"[ERROR] 期望: "<<expectedHash<<std::endl;
+                g_logger<<"[ERROR] 实际: "<<actualHash<<std::endl;
+
+                std::filesystem::remove(tempZip);
+                httpClient.SetDownloadTimeout(0);
+                return false;
+            }
+            else {
+                g_logger<<"[INFO] 更新包哈希验证通过"<<std::endl;
+            }
+        }
+
+        std::ifstream file(tempZip,std::ios::binary);
+        std::vector<unsigned char> zipData((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+        file.close();
+        std::filesystem::remove(tempZip);
+        httpClient.SetDownloadTimeout(0);
+        std::string tempDir=std::filesystem::temp_directory_path().string()+"/mc_update_temp_"+std::to_string(i);
+        EnsureDirectoryExists(tempDir);
+
+        g_logger<<"[INFO] 解压更新包..."<<std::endl;
+        if(!ExtractZip(zipData,tempDir)) {
+            g_logger<<"[ERROR] 解压更新包失败: "<<packagePath<<std::endl;
+            return false;
+        }
+        bool manifestFound=false;
+        std::string manifestPath;
+        std::vector<std::string> possibleManifestNames={
+            "update_manifest.txt",
+            "changelog.txt",
+            "file_list.txt",
+            "manifest.txt"
+        };
+
+        for(const auto& name:possibleManifestNames) {
+            std::string testPath=tempDir+"/"+name;
+            if(std::filesystem::exists(testPath)) {
+                manifestPath=testPath;
+                manifestFound=true;
+                g_logger<<"[INFO] 找到更新清单文件: "<<name<<std::endl;
+                break;
+            }
+        }
+
+        if(manifestFound) {
+            if(!ApplyUpdateFromManifest(manifestPath,tempDir)) {
+                g_logger<<"[ERROR] 应用更新清单失败"<<std::endl;
+                return false;
+            }
+        }
+        else {
+            g_logger<<"[WARN] 更新包中没有找到清单文件，将更新所有文件"<<std::endl;
+            if(!ApplyAllFilesFromUpdate(tempDir)) {
+                g_logger<<"[ERROR] 更新所有文件失败"<<std::endl;
+                return false;
+            }
+        }
+        try {
+            std::filesystem::remove_all(tempDir);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[WARN] 清理临时目录失败: "<<e.what()<<std::endl;
+        }
+
+        g_logger<<"[INFO] 更新包 ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理完成"<<std::endl;
+    }
+
+    g_logger<<"[INFO] 所有增量更新包应用完成"<<std::endl;
+    return true;
+}
+
+std::vector<std::string> MinecraftUpdater::GetUpdatePackagePath(const Json::Value& packages,const std::string& fromVersion,const std::string& toVersion) {
+    std::vector<std::string> result;
+
+    g_logger<<"[INFO] 寻找更新路径: "<<fromVersion<<" -> "<<toVersion<<std::endl;
+
+    for(const auto& package:packages) {
+        if(!package.isMember("from_version")||!package.isMember("to_version")||!package.isMember("archive")) {
+            continue;
+        }
+
+        std::string from=package["from_version"].asString();
+        std::string to=package["to_version"].asString();
+        std::string archive=package["archive"].asString();
+
+        if(from==fromVersion&&to==toVersion) {
+            g_logger<<"[INFO] 找到直接合并包: "<<archive<<" ("<<from<<" -> "<<to<<")"<<std::endl;
+            return {archive};
+        }
+    }
+
+    for(const auto& package:packages) {
+        if(!package.isMember("from_version")||!package.isMember("to_version")) {
+            continue;
+        }
+
+        std::string from=package["from_version"].asString();
+        std::string to=package["to_version"].asString();
+        std::string archive=package["archive"].asString();
+
+        if(from=="0.0.0"&&to==toVersion) {
+            g_logger<<"[INFO] 找到全量更新包: "<<archive<<" (0.0.0 -> "<<to<<")"<<std::endl;
+            return {archive};
+        }
+    }
+
+    std::map<std::string,std::vector<std::string>> graph;
+    std::map<std::string,std::string> archiveMap;
+
+    for(const auto& package:packages) {
+        if(!package.isMember("from_version")||!package.isMember("to_version")||!package.isMember("archive")) {
+            continue;
+        }
+
+        std::string from=package["from_version"].asString();
+        std::string to=package["to_version"].asString();
+        std::string archive=package["archive"].asString();
+
+        if(from=="0.0.1") {
+            continue;
+        }
+
+        graph[from].push_back(to);
+        std::string edgeKey=from+"->"+to;
+        archiveMap[edgeKey]=archive;
+    }
+
+    std::queue<std::pair<std::string,std::vector<std::string>>> q;
+    std::set<std::string> visited;
+
+    q.push({fromVersion,{}});
+    visited.insert(fromVersion);
+
+    while(!q.empty()) {
+        auto [current,path]=q.front();
+        q.pop();
+
+        if(current==toVersion) {
+            std::vector<std::string> archivePath;
+            for(size_t i=0; i<path.size(); i++) {
+                std::string from=(i==0)?fromVersion:path[i-1];
+                std::string to=path[i];
+                std::string edgeKey=from+"->"+to;
+
+                if(archiveMap.find(edgeKey)!=archiveMap.end()) {
+                    archivePath.push_back(archiveMap[edgeKey]);
+                }
+            }
+
+            g_logger<<"[INFO] 找到增量更新路径，包含 "<<archivePath.size()<<" 个包"<<std::endl;
+            return archivePath;
+        }
+
+        if(graph.find(current)!=graph.end()) {
+            for(const auto& next:graph[current]) {
+                if(visited.find(next)==visited.end()) {
+                    visited.insert(next);
+                    std::vector<std::string> newPath=path;
+                    newPath.push_back(next);
+                    q.push({next,newPath});
+                }
+            }
+        }
+    }
+
+    g_logger<<"[WARN] 无法找到增量更新路径: "<<fromVersion<<" -> "<<toVersion<<std::endl;
+    return {};
+}
+bool MinecraftUpdater::ApplyUpdateFromManifest(const std::string& manifestPath,const std::string& tempDir) {
+    std::ifstream manifestFile(manifestPath);
+    if(!manifestFile.is_open()) {
+        g_logger<<"[ERROR] 无法打开清单文件: "<<manifestPath<<std::endl;
+        return false;
+    }
+
+    std::string line;
+    int operationCount=0;
+
+    while(std::getline(manifestFile,line)) {
+        if(line.empty()||line[0]=='#') continue;
+
+        size_t colonPos=line.find(':');
+        if(colonPos!=std::string::npos) {
+            std::string operation=line.substr(0,colonPos);
+            std::string filePath=line.substr(colonPos+1);
+
+            operation.erase(0,operation.find_first_not_of(" \t"));
+            operation.erase(operation.find_last_not_of(" \t")+1);
+            filePath.erase(0,filePath.find_first_not_of(" \t"));
+            filePath.erase(filePath.find_last_not_of(" \t")+1);
+
+            if(operation=="A"||operation=="M") {
+                std::string sourceFile=tempDir+"/"+filePath;
+                std::string targetFile=gameDirectory+"/"+filePath;
+
+                EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
+
+                if(std::filesystem::exists(sourceFile)) {
+                    std::filesystem::copy(sourceFile,targetFile,
+                        std::filesystem::copy_options::overwrite_existing);
+                    g_logger<<"[INFO] "<<(operation=="A"?"新增":"修改")<<"文件: "<<filePath<<std::endl;
+                    operationCount++;
+                }
+                else {
+                    g_logger<<"[WARN] 源文件不存在: "<<sourceFile<<std::endl;
+                }
+            }
+            else if(operation=="D") {
+                std::string targetFile=gameDirectory+"/"+filePath;
+                if(std::filesystem::exists(targetFile)) {
+                    std::filesystem::remove(targetFile);
+                    g_logger<<"[INFO] 删除文件: "<<filePath<<std::endl;
+                    operationCount++;
+                }
+            }
+            else {
+                g_logger<<"[WARN] 未知的操作类型: "<<operation<<" (行: "<<line<<")"<<std::endl;
+            }
+        }
+    }
+
+    manifestFile.close();
+    g_logger<<"[INFO] 从清单文件执行了 "<<operationCount<<" 个操作"<<std::endl;
+    return true;
+}
+
+bool MinecraftUpdater::ApplyAllFilesFromUpdate(const std::string& tempDir) {
+    int fileCount=0;
+
+    for(const auto& entry:std::filesystem::recursive_directory_iterator(tempDir)) {
+        if(entry.is_regular_file()) {
+            std::string relativePath=std::filesystem::relative(entry.path(),tempDir).string();
+            std::string targetPath=gameDirectory+"/"+relativePath;
+
+            EnsureDirectoryExists(std::filesystem::path(targetPath).parent_path().string());
+
+            try {
+                if(std::filesystem::exists(targetPath)) {
+                    BackupFile(targetPath);
+                }
+
+                std::filesystem::copy(entry.path(),targetPath,
+                    std::filesystem::copy_options::overwrite_existing);
+
+                g_logger<<"[INFO] 更新文件: "<<relativePath<<std::endl;
+                fileCount++;
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 更新文件失败: "<<relativePath<<" - "<<e.what()<<std::endl;
+                return false;
+            }
+        }
+    }
+
+    g_logger<<"[INFO] 更新了 "<<fileCount<<" 个文件"<<std::endl;
+    return true;
 }

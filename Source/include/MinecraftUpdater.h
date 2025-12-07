@@ -9,6 +9,11 @@
 #include "SelfUpdater.h"
 #include "FileHasher.h"
 #include "Logger.h"
+#include <algorithm>
+#include <queue>
+#include <map>
+#include <iomanip>
+#include <sstream>
 
 class MinecraftUpdater {
 private:
@@ -20,7 +25,6 @@ private:
     Json::Value cachedUpdateInfo;
     bool hasCachedUpdateInfo;
     bool enableApiCache;
-
 public:
     MinecraftUpdater(const std::string& config,const std::string& url,const std::string& gameDir);
 
@@ -46,6 +50,15 @@ private:
     void CleanupOrphanedFiles(const std::string& directoryPath,const Json::Value& expectedContents);
 
     bool ProcessLauncherUpdate(const Json::Value& updateInfo);
+    bool ApplyIncrementalUpdate(const Json::Value& updateInfo,const std::string& localVersion,const std::string& remoteVersion);
+    std::vector<std::string> GetUpdatePackagePath(const Json::Value& packages,const std::string& fromVersion,const std::string& toVersion);
+    bool ShouldUseIncrementalUpdate(const std::string& localVersion,const std::string& remoteVersion);
+    static void DownloadProgressCallback(long long downloaded,long long total,void* userdata);
+    void ShowProgressBar(const std::string& operation,long long current,long long total);
+    void ClearProgressLine();
+    int GetDownloadTimeoutForSize(long long fileSize);
+    bool ApplyUpdateFromManifest(const std::string& manifestPath,const std::string& tempDir);
+    bool ApplyAllFilesFromUpdate(const std::string& tempDir);
 };
 
 #endif
