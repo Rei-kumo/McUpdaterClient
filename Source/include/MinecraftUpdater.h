@@ -6,6 +6,9 @@
 #include "HttpClient.h"
 #include "ConfigManager.h"
 #include "UpdateChecker.h"
+#include "SelfUpdater.h"
+#include "FileHasher.h"
+#include "Logger.h"
 
 class MinecraftUpdater {
 private:
@@ -13,6 +16,7 @@ private:
     std::string gameDirectory;
     HttpClient httpClient;
     UpdateChecker updateChecker;
+    SelfUpdater selfUpdater;
     Json::Value cachedUpdateInfo;
     bool hasCachedUpdateInfo;
     bool enableApiCache;
@@ -22,6 +26,7 @@ public:
 
     bool CheckForUpdates();
     bool ForceUpdate(bool forceSync=false);
+    bool CheckAndApplyLauncherUpdate();
 
 private:
     bool DownloadAndExtract(const std::string& url,const std::string& relativePath);
@@ -39,6 +44,8 @@ private:
     bool ProcessDeleteList(const Json::Value& deleteList);
     bool SyncDirectoryByHash(const Json::Value& dirInfo);
     void CleanupOrphanedFiles(const std::string& directoryPath,const Json::Value& expectedContents);
+
+    bool ProcessLauncherUpdate(const Json::Value& updateInfo);
 };
 
 #endif

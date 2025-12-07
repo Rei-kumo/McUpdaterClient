@@ -210,6 +210,7 @@ bool ConfigManager::InitializeDefaultConfig(){
 Json::Value ConfigManager::CreateDefaultConfig(){
     Json::Value config;
     config["version"]="1.0.0";
+    config["launcher_version"]="0.0.1";
     config["update_url"]="https://your-server.com/updates/version.json";
     config["game_directory"]="./.minecraft";
     config["auto_update"]=true;
@@ -221,6 +222,20 @@ Json::Value ConfigManager::CreateDefaultConfig(){
     config["enable_api_cache"]=true;
     config["api_timeout"]=60;
     return config;
+}
+
+std::string ConfigManager::ReadLauncherVersion() {
+    Json::Value config=ReadConfig();
+    if(config.isMember("launcher_version")) {
+        return config["launcher_version"].asString();
+    }
+    return "0.0.1";
+}
+
+bool ConfigManager::WriteLauncherVersion(const std::string& version) {
+    Json::Value config=ReadConfig();
+    config["launcher_version"]=version;
+    return WriteConfig(config);
 }
 
 bool ConfigManager::WriteConfig(const Json::Value& config){

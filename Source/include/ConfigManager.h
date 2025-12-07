@@ -5,7 +5,7 @@
 #include <json/json.h>
 #include "Logger.h"
 
-class ConfigManager{
+class ConfigManager {
 private:
     std::string configPath;
     Json::Value cachedConfig;
@@ -20,6 +20,10 @@ public:
 
     std::string ReadVersion();
     bool WriteVersion(const std::string& version);
+
+    std::string ReadLauncherVersion();
+    bool WriteLauncherVersion(const std::string& version);
+
     std::string ReadUpdateUrl();
     bool WriteUpdateUrl(const std::string& url);
     std::string ReadGameDirectory();
