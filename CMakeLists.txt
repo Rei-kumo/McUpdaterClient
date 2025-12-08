@@ -87,8 +87,7 @@ add_executable(McUpdaterClient
     ${SOURCE_DIR}/HttpClient.cpp
     ${SOURCE_DIR}/FileHasher.cpp
     ${SOURCE_DIR}/logger.cpp
-    ${SOURCE_DIR}/SelfUpdater.cpp
-)
+    ${SOURCE_DIR}/SelfUpdater.cpp)
 
 target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}

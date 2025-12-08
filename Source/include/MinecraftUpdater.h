@@ -14,6 +14,9 @@
 #include <map>
 #include <iomanip>
 #include <sstream>
+#include <thread>
+
+#include <windows.h>
 
 class MinecraftUpdater {
 private:
@@ -25,6 +28,12 @@ private:
     Json::Value cachedUpdateInfo;
     bool hasCachedUpdateInfo;
     bool enableApiCache;
+
+    std::atomic<bool> extractionInProgress;
+    std::atomic<int> currentExtractionIndex;
+    std::atomic<long long> lastExtractionTime;
+    std::thread progressMonitorThread;
+
 public:
     MinecraftUpdater(const std::string& config,const std::string& url,const std::string& gameDir);
 
@@ -33,6 +42,7 @@ public:
     bool CheckAndApplyLauncherUpdate();
 
 private:
+    bool CopyFileWithUnicode(const std::wstring& sourcePath,const std::wstring& targetPath);
     bool DownloadAndExtract(const std::string& url,const std::string& relativePath);
     bool ExtractZip(const std::vector<unsigned char>& zipData,const std::string& extractPath);
     bool SyncFiles(const Json::Value& fileList,bool forceSync);
@@ -59,6 +69,27 @@ private:
     int GetDownloadTimeoutForSize(long long fileSize);
     bool ApplyUpdateFromManifest(const std::string& manifestPath,const std::string& tempDir);
     bool ApplyAllFilesFromUpdate(const std::string& tempDir);
+
+    bool ExtractZipFromFile(const std::string& zipFilePath,const std::string& extractPath);
+    void OptimizeMemoryUsage();
+    bool ApplyUpdateFromDirectory(const std::string& sourceDir);
+    bool ExtractZipWithMiniz(const std::string& zipFilePath,const std::string& extractPath);
+    bool ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath);
+#ifdef _WIN32
+    bool ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath);
+#endif
+    bool ExtractZipOriginal(const std::string& zipFilePath,const std::string& extractPath);
+    bool IsValidZipFile(const std::string& filePath);
+    bool CheckServerResponse(const std::string& url);
+
+    void StartProgressMonitor();
+    void StopProgressMonitor();
+    void ProgressMonitorFunction();
+
+#ifdef _WIN32
+    static std::wstring Utf8ToWide(const std::string& utf8Str);
+    static std::string WideToUtf8(const std::wstring& wideStr);
+#endif
 };
 
 #endif

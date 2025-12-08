@@ -85,3 +85,67 @@ std::string FileHasher::SHA256Hash(const std::vector<unsigned char>& data) {
 	}
 	return ss.str();
 }
+// 在FileHasher类中添加
+std::string FileHasher::CalculateFileHashStream(const std::string& filePath,const std::string& algorithm) {
+    std::ifstream file(filePath,std::ios::binary);
+    if(!file) {
+        return "";
+    }
+
+    const size_t bufferSize=8192;
+    char buffer[bufferSize];
+
+    if(algorithm=="md5") {
+        MD5_CTX context;
+        MD5_Init(&context);
+
+        while(file.read(buffer,bufferSize)||file.gcount()>0) {
+            MD5_Update(&context,buffer,file.gcount());
+        }
+
+        unsigned char digest[MD5_DIGEST_LENGTH];
+        MD5_Final(digest,&context);
+
+        std::stringstream ss;
+        for(int i=0; i<MD5_DIGEST_LENGTH; ++i) {
+            ss<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)digest[i];
+        }
+        return ss.str();
+    }
+    else if(algorithm=="sha1") {
+        SHA_CTX context;
+        SHA1_Init(&context);
+
+        while(file.read(buffer,bufferSize)||file.gcount()>0) {
+            SHA1_Update(&context,buffer,file.gcount());
+        }
+
+        unsigned char digest[SHA_DIGEST_LENGTH];
+        SHA1_Final(digest,&context);
+
+        std::stringstream ss;
+        for(int i=0; i<SHA_DIGEST_LENGTH; ++i) {
+            ss<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)digest[i];
+        }
+        return ss.str();
+    }
+    else if(algorithm=="sha256") {
+        SHA256_CTX context;
+        SHA256_Init(&context);
+
+        while(file.read(buffer,bufferSize)||file.gcount()>0) {
+            SHA256_Update(&context,buffer,file.gcount());
+        }
+
+        unsigned char digest[SHA256_DIGEST_LENGTH];
+        SHA256_Final(digest,&context);
+
+        std::stringstream ss;
+        for(int i=0; i<SHA256_DIGEST_LENGTH; ++i) {
+            ss<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)digest[i];
+        }
+        return ss.str();
+    }
+
+    return "";
+}

@@ -18,11 +18,11 @@ jobs:
       uses: actions/cache@v3
       with:
         path: vcpkg
-        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+        key: vcpkg-windows-static-${{ runner.os }}-${{ github.sha }}
         restore-keys: |
-          vcpkg-${{ runner.os }}-
+          vcpkg-windows-static-${{ runner.os }}-
 
-    - name: Install dependencies with vcpkg
+    - name: Setup vcpkg
       run: |
         if (!(Test-Path "vcpkg/vcpkg.exe")) {
           git clone https://github.com/Microsoft/vcpkg.git
@@ -30,30 +30,47 @@ jobs:
           .\bootstrap-vcpkg.bat -disableMetrics
           cd ..
         }
+        
+    - name: Install dependencies
+      run: |
         vcpkg/vcpkg integrate install
-        vcpkg/vcpkg install curl:x64-windows-static openssl:x64-windows-static jsoncpp:x64-windows-static libzip:x64-windows-static bzip2:x64-windows-static zlib:x64-windows-static zstd:x64-windows-static
+        vcpkg/vcpkg install --triplet x64-windows-static curl openssl jsoncpp libzip bzip2 zlib zstd
 
     - name: Configure and build
       run: |
         mkdir build
         cd build
-        cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
-        cmake --build . --config Release
+        cmake .. -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+          -DCMAKE_BUILD_TYPE=Release
+        cmake --build . --config Release --target McUpdaterClient
 
     - name: Find and copy executable
       run: |
         echo "=== Searching for executable ==="
-        cd build
         
-        $exe = Get-ChildItem -Recurse -Filter "McUpdaterClient.exe" | Select-Object -First 1
+        $exePath = ""
+        if (Test-Path "build/Release/McUpdaterClient.exe") {
+          $exePath = "build/Release/McUpdaterClient.exe"
+        } elseif (Test-Path "build/bin/Release/McUpdaterClient.exe") {
+          $exePath = "build/bin/Release/McUpdaterClient.exe"
+        } elseif (Test-Path "build/McUpdaterClient.exe") {
+          $exePath = "build/McUpdaterClient.exe"
+        } else {
+          $exe = Get-ChildItem -Recurse -Path "build" -Filter "McUpdaterClient.exe" | Select-Object -First 1
+          if ($exe) {
+            $exePath = $exe.FullName
+          }
+        }
         
-        if ($exe) {
-          echo "Found at $($exe.FullName)"
-          Copy-Item $exe.FullName "../McUpdaterClient.exe"
+        if ($exePath) {
+          echo "Found at $exePath"
+          Copy-Item $exePath "McUpdaterClient.exe"
         } else {
           echo "Executable not found"
           echo "All files in build directory:"
-          Get-ChildItem -Recurse
+          Get-ChildItem -Recurse -Path "build"
           exit 1
         }
 

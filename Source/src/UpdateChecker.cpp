@@ -33,13 +33,19 @@ Json::Value UpdateChecker::FetchUpdateInfo() {
     g_logger<<"[INFO]正在从服务器获取更新信息: "<<updateUrl<<std::endl;
     g_logger<<"[DEBUG]当前缓存状态: "<<(enableApiCache?"启用API缓存":"禁用API缓存")<<std::endl;
 
+    Json::CharReaderBuilder reader;
+    reader.settings_["maxDocumentSize"]=10*1024*1024;
+    reader.settings_["maxDepth"]=100;
+
     std::string jsonResponse=httpClient.Get(updateUrl);
     if(jsonResponse.empty()) {
         g_logger<<"[ERROR]错误: 获取更新信息返回为空"<<std::endl;
         return Json::Value();
     }
 
-    g_logger<<"[DEBUG]服务器响应: "<<jsonResponse<<std::endl;
+    if(jsonResponse.size()>10*1024*1024) {
+        g_logger<<"[WARN]警告: JSON响应过大 ("<<(jsonResponse.size()/1024/1024)<<"MB)，可能影响性能"<<std::endl;
+    }
 
     Json::Value updateInfo;
     if(!ParseUpdateInfo(jsonResponse,updateInfo)) {
@@ -47,24 +53,6 @@ Json::Value UpdateChecker::FetchUpdateInfo() {
         return Json::Value();
     }
 
-    if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
-        std::string serverMode=updateInfo["update_mode"].asString();
-        g_logger<<"[INFO]服务端指定更新模式: "<<serverMode<<std::endl;
-
-        if(serverMode!="version"&&serverMode!="hash") {
-            g_logger<<"[WARN]警告: 服务端指定了无效的更新模式: "<<serverMode<<", 将使用客户端配置"<<std::endl;
-        }
-    }
-    else {
-        g_logger<<"[INFO]服务端未指定更新模式，将使用客户端配置"<<std::endl;
-    }
-
-    if(!updateInfo.isMember("version")) {
-        g_logger<<"[ERROR]错误: 更新信息缺少版本号(version)字段"<<std::endl;
-        return Json::Value();
-    }
-
-    g_logger<<"[INFO]成功获取更新信息，版本: "<<updateInfo["version"].asString()<<std::endl;
     return updateInfo;
 }
 

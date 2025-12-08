@@ -14,6 +14,11 @@
 #include <map>
 #include <algorithm>
 #include <mutex>
+#include <memory>
+#include "FileHasher.h"
+#include <fcntl.h>
+#include <io.h>
+#include <windows.h>
 static void ClearConsoleLine() {
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
@@ -181,8 +186,9 @@ MinecraftUpdater::MinecraftUpdater(const std::string& config,const std::string& 
     updateChecker(url,httpClient,configManager,configManager.ReadEnableApiCache()),
     selfUpdater(httpClient,configManager),
     hasCachedUpdateInfo(false),
-    enableApiCache(configManager.ReadEnableApiCache()){
-    g_logger<<"[DEBUG] McUpdater配置: "<<config<<std::endl;
+    enableApiCache(configManager.ReadEnableApiCache()) {
+
+    g_logger<<"[DEBUG] McUpdaterClient配置: "<<config<<std::endl;
 }
 
 bool MinecraftUpdater::CheckForUpdates() {
@@ -476,16 +482,35 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
     int totalChecked=0;
 
     g_logger<<"[DEBUG] 开始文件一致性检查..."<<std::endl;
+    const int BATCH_SIZE=50;
+    int processedInBatch=0;
+
+    auto processBatch=[&]() {
+        if(processedInBatch>=BATCH_SIZE) {
+            HANDLE heap=GetProcessHeap();
+            if(heap!=NULL) {
+                HeapCompact(heap,0);
+            }
+
+            std::cout<<"\r检查进度: "<<totalChecked<<" 文件 ("<<missingFiles<<" 缺失, "<<mismatchedFiles<<" 不匹配)      ";
+            std::cout.flush();
+
+            processedInBatch=0;
+        }
+        };
 
     for(const auto& fileInfo:fileManifest) {
+        processBatch();
+
         std::string relativePath=fileInfo["path"].asString();
         std::string expectedHash=fileInfo["hash"].asString();
         std::string fullPath=gameDirectory+"/"+relativePath;
 
         totalChecked++;
+        processedInBatch++;
 
         if(!std::filesystem::exists(fullPath)) {
-            g_logger<<"[INFO] 文件不存在: "<<relativePath<<std::endl;
+            g_logger<<"[DEBUG] 文件不存在: "<<relativePath<<std::endl;
             allFilesConsistent=false;
             missingFiles++;
             continue;
@@ -493,19 +518,14 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 
         std::string actualHash=FileHasher::CalculateFileHash(fullPath,hashAlgorithm);
         if(actualHash.empty()) {
-            g_logger<<"[WARN] 无法计算文件哈希: "<<relativePath<<std::endl;
+            g_logger<<"[DEBUG] 无法计算文件哈希: "<<relativePath<<std::endl;
             allFilesConsistent=false;
             mismatchedFiles++;
         }
         else if(actualHash!=expectedHash) {
-            g_logger<<"[INFO] 文件哈希不匹配: "<<relativePath<<std::endl;
-            g_logger<<"[INFO] 期望: "<<expectedHash<<std::endl;
-            g_logger<<"[INFO] 实际: "<<actualHash<<std::endl;
+            g_logger<<"[DEBUG] 文件哈希不匹配: "<<relativePath<<std::endl;
             allFilesConsistent=false;
             mismatchedFiles++;
-        }
-        else {
-            g_logger<<"[DEBUG] 文件一致: "<<relativePath<<std::endl;
         }
     }
 
@@ -514,7 +534,7 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
         std::string fullPath=gameDirectory+"/"+relativePath;
 
         if(!std::filesystem::exists(fullPath)) {
-            g_logger<<"[INFO] 目录不存在: "<<relativePath<<std::endl;
+            g_logger<<"[DEBUG] 目录不存在: "<<relativePath<<std::endl;
             allFilesConsistent=false;
             missingFiles++;
             continue;
@@ -522,14 +542,17 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 
         const Json::Value& contents=dirInfo["contents"];
         for(const auto& contentInfo:contents) {
+            processBatch();
+
             std::string fileRelativePath=contentInfo["path"].asString();
             std::string expectedHash=contentInfo["hash"].asString();
             std::string fileFullPath=fullPath+"/"+fileRelativePath;
 
             totalChecked++;
+            processedInBatch++;
 
             if(!std::filesystem::exists(fileFullPath)) {
-                g_logger<<"[INFO] 目录内文件不存在: "<<fileRelativePath<<std::endl;
+                g_logger<<"[DEBUG] 目录内文件不存在: "<<fileRelativePath<<std::endl;
                 allFilesConsistent=false;
                 missingFiles++;
                 continue;
@@ -537,20 +560,19 @@ bool MinecraftUpdater::CheckFileConsistency(const Json::Value& fileManifest,cons
 
             std::string actualHash=FileHasher::CalculateFileHash(fileFullPath,hashAlgorithm);
             if(actualHash.empty()) {
-                g_logger<<"[WARN] 无法计算目录内文件哈希: "<<fileRelativePath<<std::endl;
+                g_logger<<"[DEBUG] 无法计算目录内文件哈希: "<<fileRelativePath<<std::endl;
                 allFilesConsistent=false;
                 mismatchedFiles++;
             }
             else if(actualHash!=expectedHash) {
-                g_logger<<"[INFO] 目录内文件哈希不匹配: "<<fileRelativePath<<std::endl;
+                g_logger<<"[DEBUG] 目录内文件哈希不匹配: "<<fileRelativePath<<std::endl;
                 allFilesConsistent=false;
                 mismatchedFiles++;
             }
-            else {
-                g_logger<<"[DEBUG] 目录内文件一致: "<<fileRelativePath<<std::endl;
-            }
         }
     }
+
+    std::cout<<"\r检查完成: "<<totalChecked<<" 文件 ("<<missingFiles<<" 缺失, "<<mismatchedFiles<<" 不匹配)      "<<std::endl;
 
     g_logger<<"[INFO] 文件一致性检查完成:"<<std::endl;
     g_logger<<"[INFO]   总共检查: "<<totalChecked<<" 个文件"<<std::endl;
@@ -1038,145 +1060,552 @@ bool MinecraftUpdater::BackupFile(const std::string& filePath) {
     }
 
     std::string backupPath=filePath+".backup";
+    std::string timestamp=std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    std::string tempBackupPath=backupPath+"_"+timestamp;
 
     try {
+        if(std::filesystem::is_directory(filePath)) {
+            std::filesystem::copy(filePath,tempBackupPath,
+                std::filesystem::copy_options::recursive|
+                std::filesystem::copy_options::overwrite_existing);
+        }
+        else {
+            std::filesystem::copy_file(filePath,tempBackupPath,
+                std::filesystem::copy_options::overwrite_existing);
+        }
         if(std::filesystem::exists(backupPath)) {
             std::filesystem::remove_all(backupPath);
         }
-        if(std::filesystem::is_directory(filePath)) {
-            std::filesystem::copy(filePath,backupPath,
-                std::filesystem::copy_options::recursive|
-                std::filesystem::copy_options::overwrite_existing);
-            g_logger<<"[INFO] 备份目录: "<<filePath<<" -> "<<backupPath<<std::endl;
-        }
-        else {
-            std::filesystem::copy_file(filePath,backupPath,
-                std::filesystem::copy_options::overwrite_existing);
-            g_logger<<"[INFO] 备份文件: "<<filePath<<" -> "<<backupPath<<std::endl;
-        }
+        std::filesystem::rename(tempBackupPath,backupPath);
+
+        g_logger<<"[INFO] 备份完成: "<<filePath<<" -> "<<backupPath<<std::endl;
         return true;
     }
     catch(const std::exception& e) {
-        g_logger<<"[WARN] 警告: 备份失败: "<<filePath<<" - "<<e.what()<<std::endl;
-        g_logger<<"[WARN] 警告: 备份失败，但继续更新过程..."<<std::endl;
+        g_logger<<"[WARN] 备份失败: "<<filePath<<" - "<<e.what()<<std::endl;
+        try {
+            if(std::filesystem::exists(tempBackupPath)) {
+                std::filesystem::remove_all(tempBackupPath);
+            }
+        }
+        catch(...) {
+        }
+
         return false;
     }
 }
 
 bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,const std::string& extractPath) {
     EnsureDirectoryExists(extractPath);
-
     std::string tempDir=std::filesystem::temp_directory_path().string();
-    std::string tempZip=tempDir+"/minecraft_update_temp.zip";
+    std::string tempZip=tempDir+"/minecraft_update_"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".zip";
 
-    g_logger<<"[INFO] 创建临时文件: "<<tempZip<<std::endl;
+    g_logger<<"[INFO] 将ZIP数据写入临时文件: "<<tempZip<<std::endl;
 
-    std::ofstream file(tempZip,std::ios::binary);
-    if(!file) {
-        g_logger<<"[ERROR] 错误: 无法创建临时文件: "<<tempZip<<std::endl;
+    std::ofstream tempFile(tempZip,std::ios::binary);
+    if(!tempFile) {
+        g_logger<<"[ERROR] 无法创建临时ZIP文件: "<<tempZip<<std::endl;
         return false;
     }
-    file.write(reinterpret_cast<const char*>(zipData.data()),zipData.size());
-    file.close();
+
+    tempFile.write(reinterpret_cast<const char*>(zipData.data()),zipData.size());
+    tempFile.close();
+    bool result=ExtractZipFromFile(tempZip,extractPath);
+    std::error_code ec;
+    std::filesystem::remove(tempZip,ec);
+    if(ec) {
+        g_logger<<"[WARN] 无法删除临时文件: "<<tempZip<<" - "<<ec.message()<<std::endl;
+    }
+
+    return result;
+}
+
+bool MinecraftUpdater::ExtractZipFromFile(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 开始解压文件: "<<zipFilePath<<" 到 "<<extractPath<<std::endl;
+    if(!std::filesystem::exists(zipFilePath)) {
+        g_logger<<"[ERROR] ZIP文件不存在: "<<zipFilePath<<std::endl;
+        return false;
+    }
+    std::error_code ec;
+    auto fileSize=std::filesystem::file_size(zipFilePath,ec);
+    if(ec||fileSize==0) {
+        g_logger<<"[ERROR] ZIP文件无效或为空: "<<zipFilePath<<std::endl;
+        return false;
+    }
+
+    g_logger<<"[INFO] ZIP文件大小: "<<FormatBytes(fileSize)<<std::endl;
+    return ExtractZipWithMiniz(zipFilePath,extractPath);
+}
+
+bool MinecraftUpdater::ExtractZipWithMiniz(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 尝试使用miniz解压..."<<std::endl;
+
+    return ExtractZipSimple(zipFilePath,extractPath);
+}
+
+bool MinecraftUpdater::ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 使用简单解压方法..."<<std::endl;
+    if(!std::filesystem::exists(extractPath)) {
+        try {
+            std::filesystem::create_directories(extractPath);
+            g_logger<<"[INFO] 创建解压目录: "<<extractPath<<std::endl;
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] 无法创建解压目录: "<<e.what()<<std::endl;
+            return false;
+        }
+    }
+    return ExtractZipWithSystemCommand(zipFilePath,extractPath);
+}
+bool MinecraftUpdater::ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 使用Windows系统命令解压..."<<std::endl;
+
+    std::string command="powershell -Command \"Expand-Archive -Path '"+zipFilePath+"' -DestinationPath '"+extractPath+"' -Force\"";
+
+    g_logger<<"[DEBUG] 执行命令: "<<command<<std::endl;
+
+    STARTUPINFOA si={0};
+    PROCESS_INFORMATION pi={0};
+    si.cb=sizeof(si);
+
+    if(CreateProcessA(NULL,(LPSTR)command.c_str(),NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi)) {
+        WaitForSingleObject(pi.hProcess,INFINITE);
+        DWORD exitCode;
+        GetExitCodeProcess(pi.hProcess,&exitCode);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+
+        if(exitCode==0) {
+            g_logger<<"[INFO] 系统命令解压成功"<<std::endl;
+            return true;
+        }
+        else {
+            g_logger<<"[ERROR] 系统命令解压失败，退出代码: "<<exitCode<<std::endl;
+            return false;
+        }
+    }
+    else {
+        DWORD error=GetLastError();
+        g_logger<<"[ERROR] 无法创建解压进程，错误代码: "<<error<<std::endl;
+        return false;
+    }
+}
+std::wstring MinecraftUpdater::Utf8ToWide(const std::string& utf8Str) {
+    if(utf8Str.empty()) return L"";
+
+    int requiredSize=MultiByteToWideChar(CP_UTF8,0,utf8Str.c_str(),-1,NULL,0);
+    if(requiredSize==0) {
+        DWORD error=GetLastError();
+        g_logger<<"[ERROR] MultiByteToWideChar failed, error: "<<error<<std::endl;
+        return L"";
+    }
+
+    std::wstring wideStr(requiredSize,0);
+    if(MultiByteToWideChar(CP_UTF8,0,utf8Str.c_str(),-1,&wideStr[0],requiredSize)==0) {
+        DWORD error=GetLastError();
+        g_logger<<"[ERROR] MultiByteToWideChar failed, error: "<<error<<std::endl;
+        return L"";
+    }
+    wideStr.pop_back();
+    return wideStr;
+}
+
+std::string MinecraftUpdater::WideToUtf8(const std::wstring& wideStr) {
+    if(wideStr.empty()) return "";
+
+    int requiredSize=WideCharToMultiByte(CP_UTF8,0,wideStr.c_str(),-1,NULL,0,NULL,NULL);
+    if(requiredSize==0) {
+        DWORD error=GetLastError();
+        g_logger<<"[ERROR] WideCharToMultiByte failed, error: "<<error<<std::endl;
+        return "";
+    }
+
+    std::string utf8Str(requiredSize,0);
+    if(WideCharToMultiByte(CP_UTF8,0,wideStr.c_str(),-1,&utf8Str[0],requiredSize,NULL,NULL)==0) {
+        DWORD error=GetLastError();
+        g_logger<<"[ERROR] WideCharToMultiByte failed, error: "<<error<<std::endl;
+        return "";
+    }
+    utf8Str.pop_back();
+    return utf8Str;
+}
+bool MinecraftUpdater::ExtractZipOriginal(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 使用原始libzip解压..."<<std::endl;
 
     int err=0;
-    zip_t* zip=zip_open(tempZip.c_str(),0,&err);
+    zip_t* zip=zip_open(zipFilePath.c_str(),0,&err);
     if(!zip) {
-        g_logger<<"[ERROR] 错误: 无法打开ZIP文件: "<<tempZip<<"，错误码: "<<err<<std::endl;
-        std::filesystem::remove(tempZip);
+        g_logger<<"[ERROR] 无法打开ZIP文件: "<<zipFilePath<<"，错误码: "<<err<<std::endl;
         return false;
     }
 
     zip_int64_t numEntries=zip_get_num_entries(zip,0);
-    g_logger<<"[INFO] 开始解压 "<<numEntries<<" 个文件到: "<<extractPath<<std::endl;
+    g_logger<<"[INFO] 总共 "<<numEntries<<" 个条目需要解压"<<std::endl;
+
+    if(numEntries<=0) {
+        g_logger<<"[ERROR] ZIP文件为空"<<std::endl;
+        zip_close(zip);
+        return false;
+    }
+    g_logger<<"[INFO] 第一步：创建目录结构..."<<std::endl;
+
+    std::vector<std::string> fileEntries;
 
     for(zip_int64_t i=0; i<numEntries; i++) {
-        const char* name=zip_get_name(zip,i,0);
-        if(!name) continue;
-
-        std::string fullPath=extractPath+"/"+name;
-
-        if(name[strlen(name)-1]=='/') {
-            EnsureDirectoryExists(fullPath);
-            continue;
-        }
-
-        zip_file_t* zfile=zip_fopen_index(zip,i,0);
-        if(!zfile) {
-            g_logger<<"[ERROR] 错误: 无法解压文件: "<<name<<std::endl;
-            continue;
-        }
-
-        std::filesystem::path filePath(fullPath);
-        EnsureDirectoryExists(filePath.parent_path().string());
-
-        std::ofstream outFile(fullPath,std::ios::binary);
-        if(outFile) {
-            char buffer[8192];
-            zip_int64_t bytesRead;
-            while((bytesRead=zip_fread(zfile,buffer,sizeof(buffer)))>0) {
-                outFile.write(buffer,bytesRead);
+        const char* name=zip_get_name(zip,i,ZIP_FL_ENC_UTF_8);
+        if(!name) {
+            name=zip_get_name(zip,i,0);
+            if(!name) {
+                g_logger<<"[WARN] 无法获取文件 "<<i<<" 的文件名"<<std::endl;
+                continue;
             }
-            outFile.close();
-            g_logger<<"[INFO] 解压文件: "<<name<<std::endl;
+        }
+        std::string originalName=name;
+        std::string safeName=originalName;
+        std::wstring wideName=Utf8ToWide(originalName);
+        if(wideName.empty()) {
+            g_logger<<"[WARN] 无法转换文件名: "<<originalName<<std::endl;
+            safeName="file_"+std::to_string(i)+".dat";
+            g_logger<<"[INFO] 使用替代文件名: "<<safeName<<std::endl;
+        }
+        std::string fullPath;
+        std::wstring wideExtractPath=Utf8ToWide(extractPath);
+        if(!wideExtractPath.empty()&&!wideName.empty()) {
+            std::wstring wideFullPath=wideExtractPath+L"/"+wideName;
+            fullPath=WideToUtf8(wideFullPath);
+            if(!wideName.empty()&&wideName.back()==L'/') {
+                try {
+                    std::filesystem::path dirPath=wideFullPath;
+                    std::filesystem::create_directories(dirPath);
+
+                    if(i%50==0) {
+                        g_logger<<"[DEBUG] 创建目录: "<<originalName<<std::endl;
+                    }
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[WARN] 无法创建目录 "<<originalName<<": "<<e.what()<<std::endl;
+                }
+                continue;
+            }
         }
         else {
-            g_logger<<"[ERROR] 错误: 无法创建文件: "<<fullPath<<std::endl;
+            fullPath=extractPath+"/"+safeName;
+        }
+        fullPath=extractPath+"/"+safeName;
+        if(!safeName.empty()&&safeName.back()=='/') {
+            try {
+                std::filesystem::create_directories(fullPath);
+                if(i%50==0) {
+                    g_logger<<"[DEBUG] 创建目录: "<<originalName<<std::endl;
+                }
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[WARN] 无法创建目录 "<<originalName<<": "<<e.what()<<std::endl;
+            }
+            continue;
+        }
+        fileEntries.push_back(originalName);
+    }
+
+    g_logger<<"[INFO] 第二步：解压 "<<fileEntries.size()<<" 个文件..."<<std::endl;
+    const size_t bufferSize=65536;
+    std::vector<char> buffer(bufferSize);
+    int extractedFiles=0;
+    int failedFiles=0;
+    int unicodeFailedFiles=0;
+    int totalFiles=static_cast<int>(fileEntries.size());
+
+    for(size_t idx=0; idx<fileEntries.size(); idx++) {
+        const auto& originalName=fileEntries[idx];
+        zip_int64_t index=zip_name_locate(zip,originalName.c_str(),ZIP_FL_ENC_UTF_8);
+        if(index<0) {
+            index=zip_name_locate(zip,originalName.c_str(),0);
+            if(index<0) {
+                g_logger<<"[WARN] 无法找到文件索引: "<<originalName<<std::endl;
+                failedFiles++;
+                continue;
+            }
         }
 
+        zip_file_t* zfile=zip_fopen_index(zip,index,0);
+        if(!zfile) {
+            g_logger<<"[WARN] 无法打开文件: "<<originalName<<std::endl;
+            failedFiles++;
+            continue;
+        }
+
+        std::string safeName=originalName;
+        std::string fullPath;
+        std::wstring wideExtractPath=Utf8ToWide(extractPath);
+        std::wstring wideName=Utf8ToWide(originalName);
+
+        if(!wideExtractPath.empty()&&!wideName.empty()) {
+            std::wstring wideFullPath=wideExtractPath+L"/"+wideName;
+            fullPath=WideToUtf8(wideFullPath);
+            std::filesystem::path filePath=wideFullPath;
+            std::filesystem::create_directories(filePath.parent_path());
+            FILE* outFile=_wfopen(wideFullPath.c_str(),L"wb");
+            if(outFile) {
+                zip_int64_t bytesRead;
+                long long totalBytes=0;
+                while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
+                    size_t written=fwrite(buffer.data(),1,(size_t)bytesRead,outFile);
+                    totalBytes+=bytesRead;
+                }
+
+                fclose(outFile);
+                extractedFiles++;
+            }
+            else {
+                DWORD error=GetLastError();
+                g_logger<<"[ERROR] 无法创建文件: "<<originalName<<" (错误码: "<<error<<")"<<std::endl;
+                failedFiles++;
+                unicodeFailedFiles++;
+                std::string asciiName="file_"+std::to_string(extractedFiles+failedFiles)+".dat";
+                std::string asciiFullPath=extractPath+"/"+asciiName;
+
+                g_logger<<"[INFO] 尝试使用ASCII名称: "<<asciiName<<std::endl;
+
+                std::ofstream asciiFile(asciiFullPath,std::ios::binary);
+                if(asciiFile) {
+                    zip_int64_t bytesRead;
+                    long long totalBytes=0;
+                    zip_fclose(zfile);
+                    zfile=zip_fopen_index(zip,index,0);
+
+                    if(zfile) {
+                        while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
+                            asciiFile.write(buffer.data(),bytesRead);
+                            totalBytes+=bytesRead;
+                        }
+                        asciiFile.close();
+                        extractedFiles++;
+                        g_logger<<"[INFO] 文件 "<<originalName<<" 保存为 "<<asciiName<<std::endl;
+                    }
+                }
+            }
+        }
+        else {
+            g_logger<<"[WARN] 无法处理Unicode文件名: "<<originalName<<std::endl;
+            failedFiles++;
+            unicodeFailedFiles++;
+        }
         zip_fclose(zfile);
+        if((extractedFiles+failedFiles)%100==0) {
+            int processed=extractedFiles+failedFiles;
+            int percent=static_cast<int>((processed*100)/(std::max)(totalFiles,1));
+            std::cout<<"\r解压进度: "<<processed<<"/"<<totalFiles<<" 文件 ("<<percent<<"%)，成功: "<<extractedFiles<<"，失败: "<<failedFiles<<"      ";
+            std::cout.flush();
+            g_logger<<"[INFO] 已处理 "<<processed<<"/"<<totalFiles<<" 个文件 ("<<percent<<"%)"<<std::endl;
+        }
+        if(failedFiles>=20&&idx>100) {
+            g_logger<<"[ERROR] 失败文件过多，停止解压 (总失败: "<<failedFiles<<", Unicode失败: "<<unicodeFailedFiles<<")"<<std::endl;
+            break;
+        }
     }
 
     zip_close(zip);
-    std::filesystem::remove(tempZip);
-    g_logger<<"[INFO] 解压完成: "<<extractPath<<std::endl;
-    return true;
-}
 
-bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::string& relativePath) {
-    std::vector<unsigned char> zipData;
+    std::cout<<"\r解压完成: "<<extractedFiles<<"/"<<totalFiles<<" 个文件已提取，失败: "<<failedFiles<<" (Unicode失败: "<<unicodeFailedFiles<<")                  "<<std::endl;
+    g_logger<<"[INFO] 解压完成: "<<extractedFiles<<"/"<<totalFiles<<" 个文件已提取，失败: "<<failedFiles<<std::endl;
 
-    g_logger<<"[INFO] 下载目录: "<<url<<" -> "<<relativePath<<std::endl;
-
-    std::string progressMessage="下载目录 "+relativePath;
-    ShowProgressBar(progressMessage,0,1);
-
-    if(!httpClient.DownloadToMemoryWithProgress(url,zipData,
-        [this,progressMessage](long long downloaded,long long total,void* userdata){
-            ShowProgressBar(progressMessage,downloaded,total);
-        },nullptr)) {
-
-        ClearProgressLine();
-        g_logger<<"[ERROR] 错误: 下载失败: "<<url<<std::endl;
+    if(unicodeFailedFiles>0) {
+        g_logger<<"[WARN] "<<unicodeFailedFiles<<" 个文件因Unicode编码问题未能正确提取"<<std::endl;
+        g_logger<<"[WARN] 建议检查系统区域设置或使用英文文件名"<<std::endl;
+    }
+    float successRate=(totalFiles>0)?(extractedFiles*100.0f/totalFiles):0.0f;
+    g_logger<<"[INFO] 解压成功率: "<<std::fixed<<std::setprecision(1)<<successRate<<"%"<<std::endl;
+    if(successRate<80.0f) {
+        g_logger<<"[WARN] 解压成功率较低，可能需要手动检查"<<std::endl;
         return false;
     }
+
+    return extractedFiles>0;
+}
+bool MinecraftUpdater::DownloadAndExtract(const std::string& url,const std::string& relativePath) {
+    g_logger<<"[INFO] 下载并解压: "<<url<<" -> "<<relativePath<<std::endl;
+    std::string tempDir=std::filesystem::temp_directory_path().string();
+    std::string tempZip=tempDir+"/mc_temp_"+
+        std::to_string(GetCurrentProcessId())+"_"+
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".zip";
+    std::string progressMessage="下载 "+relativePath;
+    ShowProgressBar(progressMessage,0,1);
+
+    bool downloadSuccess=httpClient.DownloadFileWithProgress(
+        url,
+        tempZip,
+        [this,progressMessage](long long downloaded,long long total,void* userdata) {
+            ShowProgressBar(progressMessage,downloaded,total);
+        },
+        nullptr
+    );
 
     ClearProgressLine();
 
-    if(zipData.empty()) {
-        g_logger<<"[ERROR] 错误: 下载的文件为空: "<<url<<std::endl;
+    if(!downloadSuccess) {
+        g_logger<<"[ERROR] 下载失败: "<<url<<std::endl;
+        return false;
+    }
+    std::error_code ec;
+    auto fileSize=std::filesystem::file_size(tempZip,ec);
+    if(ec) {
+        g_logger<<"[ERROR] 无法获取文件大小: "<<ec.message()<<std::endl;
+        std::filesystem::remove(tempZip);
         return false;
     }
 
-    std::filesystem::path gameDirPath=std::filesystem::absolute(gameDirectory);
-    std::string fullPath=(gameDirPath/relativePath).string();
+    g_logger<<"[INFO] 下载完成，文件大小: "<<FormatBytes(fileSize)<<std::endl;
+    if(fileSize<1024) {
+        std::ifstream file(tempZip,std::ios::binary);
+        if(file) {
+            std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+            file.close();
+            if(content.find("404")!=std::string::npos||
+                content.find("Not Found")!=std::string::npos||
+                content.find("Error")!=std::string::npos) {
 
-    g_logger<<"[DEBUG] 完整目标路径: "<<fullPath<<std::endl;
-
-    std::filesystem::path pathObj(fullPath);
-    if(pathObj.has_parent_path()) {
-        EnsureDirectoryExists(pathObj.parent_path().string());
-    }
-
-    if(std::filesystem::exists(fullPath)) {
-        g_logger<<"[INFO] 备份原有目录: "<<fullPath<<std::endl;
-        if(!BackupFile(fullPath)) {
-            g_logger<<"[WARN] 警告: 目录备份失败，但继续更新..."<<std::endl;
+                g_logger<<"[INFO] 服务器返回错误页面，可能是空文件夹，将创建空目录"<<std::endl;
+                g_logger<<"[DEBUG] 服务器响应: "<<content<<std::endl;
+                std::filesystem::remove(tempZip);
+                std::filesystem::path gameDirPath=std::filesystem::absolute(gameDirectory);
+                std::string extractPath=(gameDirPath/relativePath).string();
+                try {
+                    if(!std::filesystem::exists(extractPath)) {
+                        std::filesystem::create_directories(extractPath);
+                        g_logger<<"[INFO] 已创建空目录: "<<extractPath<<std::endl;
+                    }
+                    else {
+                        g_logger<<"[INFO] 目录已存在: "<<extractPath<<std::endl;
+                    }
+                    return true;
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] 创建目录失败: "<<e.what()<<std::endl;
+                    return false;
+                }
+            }
         }
     }
+    if(!IsValidZipFile(tempZip)) {
+        g_logger<<"[ERROR] 下载的文件不是有效的ZIP文件，大小: "<<FormatBytes(fileSize)<<std::endl;
+        if(fileSize<1024) {
+            std::ifstream file(tempZip,std::ios::binary);
+            if(file) {
+                std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+                g_logger<<"[DEBUG] 文件内容: "<<content<<std::endl;
+            }
+            file.close();
+        }
 
-    return ExtractZip(zipData,fullPath);
+        std::filesystem::remove(tempZip);
+        return false;
+    }
+    std::filesystem::path gameDirPath=std::filesystem::absolute(gameDirectory);
+    std::string extractPath=(gameDirPath/relativePath).string();
+    if(std::filesystem::exists(extractPath)) {
+        g_logger<<"[INFO] 备份原有目录..."<<std::endl;
+        BackupFile(extractPath);
+    }
+    bool extractSuccess=ExtractZipOriginal(tempZip,extractPath);
+    std::filesystem::remove(tempZip);
+
+    if(!extractSuccess) {
+        g_logger<<"[ERROR] 解压失败"<<std::endl;
+        return false;
+    }
+
+    return true;
 }
+bool MinecraftUpdater::CheckServerResponse(const std::string& url) {
+    g_logger<<"[DEBUG] 检查服务器响应: "<<url<<std::endl;
+
+    try {
+        std::string tempFile=std::filesystem::temp_directory_path().string()+"/test_response.bin";
+
+        if(!httpClient.DownloadFileWithProgress(url,tempFile,nullptr,nullptr)) {
+            g_logger<<"[DEBUG] 服务器响应测试失败"<<std::endl;
+            return false;
+        }
+
+        std::error_code ec;
+        auto fileSize=std::filesystem::file_size(tempFile,ec);
+        std::filesystem::remove(tempFile);
+
+        if(ec||fileSize==0) {
+            g_logger<<"[DEBUG] 服务器返回空文件或错误"<<std::endl;
+            return false;
+        }
+
+        g_logger<<"[DEBUG] 服务器响应正常，文件大小: "<<FormatBytes(fileSize)<<std::endl;
+        return true;
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[DEBUG] 检查服务器响应异常: "<<e.what()<<std::endl;
+        return false;
+    }
+}
+
+bool MinecraftUpdater::IsValidZipFile(const std::string& filePath) {
+    std::ifstream file(filePath,std::ios::binary);
+    if(!file) {
+        g_logger<<"[DEBUG] 无法打开文件: "<<filePath<<std::endl;
+        return false;
+    }
+
+    file.seekg(0,std::ios::end);
+    size_t fileSize=file.tellg();
+    file.seekg(0,std::ios::beg);
+
+    if(fileSize<22) {
+        g_logger<<"[DEBUG] 文件太小 ("<<fileSize<<" 字节)，可能是空ZIP文件"<<std::endl;
+
+        if(fileSize==0) {
+            return true;
+        }
+
+        std::vector<char> buffer(fileSize);
+        file.read(buffer.data(),fileSize);
+
+        if(fileSize==22) {
+            if(buffer[0]==0x50&&buffer[1]==0x4B&&
+                buffer[2]==0x05&&buffer[3]==0x06) {
+                g_logger<<"[DEBUG] 有效的空ZIP文件（只有目录结束标记）"<<std::endl;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    char header[4];
+    file.read(header,4);
+
+    if(file.gcount()<4) {
+        g_logger<<"[DEBUG] 无法读取文件头"<<std::endl;
+        return false;
+    }
+    bool isZipSignature=(header[0]==0x50&&header[1]==0x4B&&
+        header[2]==0x03&&header[3]==0x04);
+
+    if(!isZipSignature) {
+        g_logger<<"[DEBUG] 文件头不是有效的ZIP签名: ";
+        for(int i=0; i<4; ++i) {
+            g_logger<<std::hex<<(int)(unsigned char)header[i]<<" ";
+        }
+        g_logger<<std::dec<<std::endl;
+
+        if(fileSize==0) {
+            g_logger<<"[DEBUG] 空文件，可能是空目录"<<std::endl;
+            return true;
+        }
+
+        return false;
+    }
+
+    g_logger<<"[DEBUG] 有效的ZIP文件签名，文件大小: "<<FormatBytes(fileSize)<<std::endl;
+    return true;
+}
+
 
 bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
     if(!fileList.isArray()) {
@@ -1202,17 +1631,43 @@ bool MinecraftUpdater::SyncFiles(const Json::Value& fileList,bool forceSync) {
             continue;
         }
 
-        std::string fullPath=gameDirectory+"/"+path;
+        g_logger<<"[DEBUG] 检查URL: "<<url<<std::endl;
 
         if(type=="directory") {
             g_logger<<"[INFO] 更新目录: "<<path<<std::endl;
+            if(fileInfo.isMember("hash")) {
+                g_logger<<"[DEBUG] 目录哈希: "<<fileInfo["hash"].asString()<<std::endl;
+            }
+            if(fileInfo.isMember("size")) {
+                g_logger<<"[DEBUG] 期望大小: "<<FormatBytes(fileInfo["size"].asInt64())<<std::endl;
+            }
+
             if(!DownloadAndExtract(url,path)) {
                 g_logger<<"[ERROR] 错误: 目录更新失败: "<<path<<std::endl;
-                if(forceSync) return false;
+
+                if(forceSync) {
+                    g_logger<<"[ERROR] 强制同步模式，更新失败"<<std::endl;
+                    return false;
+                }
+
                 allSuccess=false;
+                std::string fullPath=gameDirectory+"/"+path;
+                g_logger<<"[WARN] 尝试创建空目录作为后备: "<<fullPath<<std::endl;
+
+                try {
+                    std::filesystem::create_directories(fullPath);
+                    g_logger<<"[INFO] 已创建空目录: "<<fullPath<<std::endl;
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] 创建空目录失败: "<<e.what()<<std::endl;
+                }
+            }
+            else {
+                g_logger<<"[INFO] 目录更新成功: "<<path<<std::endl;
             }
         }
         else {
+            std::string fullPath=gameDirectory+"/"+path;
             std::string outputDir=std::filesystem::path(fullPath).parent_path().string();
             EnsureDirectoryExists(outputDir);
 
@@ -1298,15 +1753,18 @@ bool MinecraftUpdater::ShouldUseIncrementalUpdate(const std::string& localVersio
 }
 
 bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,const std::string& localVersion,const std::string& remoteVersion) {
-    const Json::Value& packages=updateInfo["incremental_packages"];
-    std::string hashAlgorithm=configManager.ReadHashAlgorithm();
+    cachedUpdateInfo=Json::Value();
+    hasCachedUpdateInfo=false;
 
+    Json::Value().swap(cachedUpdateInfo);
+
+    const Json::Value& packages=updateInfo["incremental_packages"];
     if(!packages.isArray()||packages.size()==0) {
         g_logger<<"[INFO] 没有可用的增量更新包"<<std::endl;
         return false;
     }
 
-    g_logger<<"[INFO] 开始处理增量更新: "<<localVersion<<" -> "<<remoteVersion<<std::endl;
+    g_logger<<"[INFO] 开始处理增量更新:"<<localVersion<<" -> "<<remoteVersion<<std::endl;
 
     std::vector<std::string> packagePaths=GetUpdatePackagePath(packages,localVersion,remoteVersion);
 
@@ -1321,44 +1779,52 @@ bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,cons
         const std::string& packagePath=packagePaths[i];
         g_logger<<"[INFO] ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理更新包: "<<packagePath<<std::endl;
 
-        std::string expectedHash;
-        long long expectedSize=0;
+        if(i>0) {
+            OptimizeMemoryUsage();
+        }
+
+        Json::Value packageInfo;
         for(const auto& package:packages) {
             if(package["archive"].asString()==packagePath) {
-                if(package.isMember("hash")) {
-                    expectedHash=package["hash"].asString();
-                }
-                if(package.isMember("size")) {
-                    expectedSize=package["size"].asInt64();
-                }
+                packageInfo=package;
                 break;
             }
         }
-        if(expectedSize>0) {
-            int downloadTimeout=GetDownloadTimeoutForSize(expectedSize);
-            httpClient.SetDownloadTimeout(downloadTimeout);
-            g_logger<<"[DEBUG] 设置下载超时: "<<downloadTimeout<<"秒 (文件大小: "<<FormatBytes(expectedSize)<<")"<<std::endl;
+
+        if(packageInfo.isNull()) {
+            g_logger<<"[ERROR] 找不到包信息: "<<packagePath<<std::endl;
+            continue;
         }
-        else {
-            httpClient.SetDownloadTimeout(300);
-        }
-        std::string tempZip=std::filesystem::temp_directory_path().string()+"/mc_update_"+std::to_string(i)+".zip";
+
+        std::string expectedHash=packageInfo["hash"].asString();
+        long long expectedSize=packageInfo.isMember("size")?packageInfo["size"].asInt64():0;
+
+        std::string tempDir=std::filesystem::temp_directory_path().string();
+        std::string tempZip=tempDir+"/mc_pkg_"+std::to_string(i)+".zip";
 
         g_logger<<"[INFO] 开始下载更新包..."<<std::endl;
 
         if(!httpClient.DownloadFileWithProgress(packagePath,tempZip,
-            DownloadProgressCallback,this)) {
-            g_logger<<std::endl<<"[ERROR] 下载更新包失败: "<<packagePath<<std::endl;
+            [this,i](long long downloaded,long long total,void* userdata) {
+                std::cout<<"\r下载包 "<<(i+1)<<": ";
+                if(total>0) {
+                    int percent=static_cast<int>(downloaded*100/total);
+                    std::cout<<percent<<"% ("<<FormatBytes(downloaded)<<"/"<<FormatBytes(total)<<")     ";
+                }
+                else {
+                    std::cout<<FormatBytes(downloaded)<<" 已下载     ";
+                }
+                std::cout.flush();
+            },nullptr)) {
 
-            if(std::filesystem::exists(tempZip)) {
-                std::filesystem::remove(tempZip);
-            }
-
-            httpClient.SetDownloadTimeout(0);
+            std::cout<<std::endl;
+            g_logger<<"[ERROR] 下载更新包失败: "<<packagePath<<std::endl;
             return false;
         }
-        ClearProgressLine();
+
+        std::cout<<std::endl;
         g_logger<<"[INFO] 下载完成"<<std::endl;
+
         if(expectedSize>0) {
             std::error_code ec;
             auto actualSize=std::filesystem::file_size(tempZip,ec);
@@ -1366,17 +1832,17 @@ bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,cons
                 g_logger<<"[WARN] 文件大小不匹配: 期望 "<<FormatBytes(expectedSize)<<", 实际 "<<FormatBytes(actualSize)<<std::endl;
             }
         }
+
         if(!expectedHash.empty()) {
             g_logger<<"[INFO] 验证文件哈希..."<<std::endl;
 
-            std::string actualHash=FileHasher::CalculateFileHash(tempZip,hashAlgorithm);
+            std::string actualHash=FileHasher::CalculateFileHashStream(tempZip,"md5");
             if(actualHash!=expectedHash) {
-                g_logger<<"[ERROR] 更新包哈希验证失败: "<<packagePath<<std::endl;
+                g_logger<<"[ERROR] 更新包哈希验证失败"<<std::endl;
                 g_logger<<"[ERROR] 期望: "<<expectedHash<<std::endl;
                 g_logger<<"[ERROR] 实际: "<<actualHash<<std::endl;
 
                 std::filesystem::remove(tempZip);
-                httpClient.SetDownloadTimeout(0);
                 return false;
             }
             else {
@@ -1384,62 +1850,35 @@ bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,cons
             }
         }
 
-        std::ifstream file(tempZip,std::ios::binary);
-        std::vector<unsigned char> zipData((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-        file.close();
-        std::filesystem::remove(tempZip);
-        httpClient.SetDownloadTimeout(0);
-        std::string tempDir=std::filesystem::temp_directory_path().string()+"/mc_update_temp_"+std::to_string(i);
-        EnsureDirectoryExists(tempDir);
+        std::string tempExtractDir=tempDir+"/mc_extract_"+std::to_string(i);
+        EnsureDirectoryExists(tempExtractDir);
 
         g_logger<<"[INFO] 解压更新包..."<<std::endl;
-        if(!ExtractZip(zipData,tempDir)) {
+        if(!ExtractZipFromFile(tempZip,tempExtractDir)) {
             g_logger<<"[ERROR] 解压更新包失败: "<<packagePath<<std::endl;
+            std::filesystem::remove_all(tempExtractDir);
+            std::filesystem::remove(tempZip);
             return false;
         }
-        bool manifestFound=false;
-        std::string manifestPath;
-        std::vector<std::string> possibleManifestNames={
-            "update_manifest.txt",
-            "changelog.txt",
-            "file_list.txt",
-            "manifest.txt"
-        };
 
-        for(const auto& name:possibleManifestNames) {
-            std::string testPath=tempDir+"/"+name;
-            if(std::filesystem::exists(testPath)) {
-                manifestPath=testPath;
-                manifestFound=true;
-                g_logger<<"[INFO] 找到更新清单文件: "<<name<<std::endl;
-                break;
-            }
+        g_logger<<"[INFO] 应用更新..."<<std::endl;
+        if(!ApplyUpdateFromDirectory(tempExtractDir)) {
+            g_logger<<"[ERROR] 应用更新失败"<<std::endl;
+            std::filesystem::remove_all(tempExtractDir);
+            std::filesystem::remove(tempZip);
+            return false;
         }
 
-        if(manifestFound) {
-            if(!ApplyUpdateFromManifest(manifestPath,tempDir)) {
-                g_logger<<"[ERROR] 应用更新清单失败"<<std::endl;
-                return false;
-            }
-        }
-        else {
-            g_logger<<"[WARN] 更新包中没有找到清单文件，将更新所有文件"<<std::endl;
-            if(!ApplyAllFilesFromUpdate(tempDir)) {
-                g_logger<<"[ERROR] 更新所有文件失败"<<std::endl;
-                return false;
-            }
-        }
-        try {
-            std::filesystem::remove_all(tempDir);
-        }
-        catch(const std::exception& e) {
-            g_logger<<"[WARN] 清理临时目录失败: "<<e.what()<<std::endl;
-        }
+        std::filesystem::remove_all(tempExtractDir);
+        std::filesystem::remove(tempZip);
 
         g_logger<<"[INFO] 更新包 ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理完成"<<std::endl;
+
+        OptimizeMemoryUsage();
     }
 
     g_logger<<"[INFO] 所有增量更新包应用完成"<<std::endl;
+
     return true;
 }
 
@@ -1600,32 +2039,170 @@ bool MinecraftUpdater::ApplyUpdateFromManifest(const std::string& manifestPath,c
 
 bool MinecraftUpdater::ApplyAllFilesFromUpdate(const std::string& tempDir) {
     int fileCount=0;
+    int failedCount=0;
 
-    for(const auto& entry:std::filesystem::recursive_directory_iterator(tempDir)) {
-        if(entry.is_regular_file()) {
-            std::string relativePath=std::filesystem::relative(entry.path(),tempDir).string();
-            std::string targetPath=gameDirectory+"/"+relativePath;
+    std::wstring wideTempDir=Utf8ToWide(tempDir);
+    std::wstring wideGameDir=Utf8ToWide(gameDirectory);
 
-            EnsureDirectoryExists(std::filesystem::path(targetPath).parent_path().string());
+    if(wideTempDir.empty()||wideGameDir.empty()) {
+        g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;
+        return false;
+    }
 
-            try {
-                if(std::filesystem::exists(targetPath)) {
-                    BackupFile(targetPath);
+    try {
+        for(const auto& entry:std::filesystem::recursive_directory_iterator(wideTempDir)) {
+            if(entry.is_regular_file()) {
+                std::wstring wideRelativePath=entry.path().wstring().substr(wideTempDir.size()+1);
+                std::wstring wideTargetPath=wideGameDir+L"\\"+wideRelativePath;
+                std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
+                if(!targetDir.empty()) {
+                    std::filesystem::create_directories(targetDir);
                 }
+                bool copySuccess=CopyFileWithUnicode(entry.path().wstring(),wideTargetPath);
 
-                std::filesystem::copy(entry.path(),targetPath,
-                    std::filesystem::copy_options::overwrite_existing);
-
-                g_logger<<"[INFO] 更新文件: "<<relativePath<<std::endl;
-                fileCount++;
-            }
-            catch(const std::exception& e) {
-                g_logger<<"[ERROR] 更新文件失败: "<<relativePath<<" - "<<e.what()<<std::endl;
-                return false;
+                if(copySuccess) {
+                    fileCount++;
+                    if(fileCount%100==0) {
+                        std::cout<<"\r更新进度: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"     ";
+                        std::cout.flush();
+                    }
+                }
+                else {
+                    failedCount++;
+                }
             }
         }
     }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 遍历临时目录失败: "<<e.what()<<std::endl;
+        return false;
+    }
 
-    g_logger<<"[INFO] 更新了 "<<fileCount<<" 个文件"<<std::endl;
+    std::cout<<"\r更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
+    g_logger<<"[INFO] 更新了 "<<fileCount<<" 个文件，失败: "<<failedCount<<std::endl;
+
+    return fileCount>0&&failedCount==0;
+}
+bool MinecraftUpdater::ApplyUpdateFromDirectory(const std::string& sourceDir) {
+    int fileCount=0;
+    int failedCount=0;
+    const int BATCH_SIZE=50;
+
+    try {
+#ifdef _WIN32
+        std::wstring wideSourceDir=Utf8ToWide(sourceDir);
+        std::wstring wideGameDir=Utf8ToWide(gameDirectory);
+
+        if(wideSourceDir.empty()||wideGameDir.empty()) {
+            g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;
+            return false;
+        }
+
+        for(const auto& entry:std::filesystem::recursive_directory_iterator(wideSourceDir)) {
+            if(entry.is_regular_file()) {
+                std::wstring wideRelativePath=entry.path().wstring().substr(wideSourceDir.size()+1);
+                std::wstring wideTargetPath=wideGameDir+L"\\"+wideRelativePath;
+
+                std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
+                if(!targetDir.empty()) {
+                    std::filesystem::create_directories(targetDir);
+                }
+
+                bool copySuccess=CopyFileWithUnicode(entry.path().wstring(),wideTargetPath);
+
+                if(copySuccess) {
+                    fileCount++;
+
+                    if(fileCount%BATCH_SIZE==0) {
+                        OptimizeMemoryUsage();
+                        std::cout<<"\r应用更新: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"     ";
+                        std::cout.flush();
+                    }
+                }
+                else {
+                    failedCount++;
+                    g_logger<<"[WARN] 文件复制失败: "<<WideToUtf8(entry.path().wstring())<<std::endl;
+                }
+            }
+        }
+#else
+        for(const auto& entry:std::filesystem::recursive_directory_iterator(sourceDir)) {
+            if(entry.is_regular_file()) {
+                std::string relativePath=std::filesystem::relative(entry.path(),sourceDir).string();
+                std::replace(relativePath.begin(),relativePath.end(),'\\','/');
+
+                std::string targetPath=gameDirectory+"/"+relativePath;
+
+                std::filesystem::path targetDir=std::filesystem::path(targetPath).parent_path();
+                EnsureDirectoryExists(targetDir.string());
+
+                try {
+                    std::filesystem::copy(entry.path(),targetPath,
+                        std::filesystem::copy_options::overwrite_existing);
+
+                    fileCount++;
+
+                    if(fileCount%BATCH_SIZE==0) {
+                        OptimizeMemoryUsage();
+                        std::cout<<"\r应用更新: "<<fileCount<<" 个文件已处理     ";
+                        std::cout.flush();
+                    }
+                }
+                catch(const std::exception& e) {
+                    failedCount++;
+                    g_logger<<"[ERROR] 更新文件失败: "<<relativePath<<" - "<<e.what()<<std::endl;
+                }
+            }
+        }
+#endif
+
+        std::cout<<"\r应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
+        g_logger<<"[INFO] 应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<std::endl;
+
+        if(failedCount>0) {
+            g_logger<<"[WARN] "<<failedCount<<" 个文件处理失败"<<std::endl;
+            return false;
+        }
+
+        return true;
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 应用更新失败: "<<e.what()<<std::endl;
+        return false;
+    }
+}
+bool MinecraftUpdater::CopyFileWithUnicode(const std::wstring& sourcePath,const std::wstring& targetPath) {
+    BOOL result=CopyFileW(sourcePath.c_str(),targetPath.c_str(),FALSE);
+
+    if(!result) {
+        DWORD error=GetLastError();
+
+        if(error==ERROR_ACCESS_DENIED) {
+            DeleteFileW(targetPath.c_str());
+            result=CopyFileW(sourcePath.c_str(),targetPath.c_str(),FALSE);
+
+            if(!result) {
+                error=GetLastError();
+                g_logger<<"[ERROR] 复制文件失败 (删除后重试): "<<WideToUtf8(sourcePath)<<" -> "<<WideToUtf8(targetPath)<<"，错误码: "<<error<<std::endl;
+                return false;
+            }
+        }
+        else {
+            g_logger<<"[ERROR] 复制文件失败: "<<WideToUtf8(sourcePath)<<" -> "<<WideToUtf8(targetPath)<<"，错误码: "<<error<<std::endl;
+            return false;
+        }
+    }
+
     return true;
+}
+void MinecraftUpdater::OptimizeMemoryUsage() {
+    static int callCount=0;
+    callCount++;
+    if(callCount%10==0) {
+        SetProcessWorkingSetSize(GetCurrentProcess(),(SIZE_T)-1,(SIZE_T)-1);
+        HANDLE heap=GetProcessHeap();
+        if(heap) {
+            HeapCompact(heap,HEAP_NO_SERIALIZE);
+        }
+    }
 }
