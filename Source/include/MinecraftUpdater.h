@@ -75,9 +75,7 @@ private:
     bool ApplyUpdateFromDirectory(const std::string& sourceDir);
     bool ExtractZipWithMiniz(const std::string& zipFilePath,const std::string& extractPath);
     bool ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath);
-#ifdef _WIN32
     bool ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath);
-#endif
     bool ExtractZipOriginal(const std::string& zipFilePath,const std::string& extractPath);
     bool IsValidZipFile(const std::string& filePath);
     bool CheckServerResponse(const std::string& url);
@@ -86,10 +84,12 @@ private:
     void StopProgressMonitor();
     void ProgressMonitorFunction();
 
-#ifdef _WIN32
     static std::wstring Utf8ToWide(const std::string& utf8Str);
     static std::string WideToUtf8(const std::wstring& wideStr);
-#endif
+
+    void CleanupTempExtractDir(const std::string& extractPath);
+    void CleanupTempFiles(const std::string& zipFilePath,const std::string& extractPath);
+    bool ValidateExtraction(const std::string& extractPath);
 };
 
 #endif

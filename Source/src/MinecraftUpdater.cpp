@@ -1122,65 +1122,114 @@ bool MinecraftUpdater::ExtractZip(const std::vector<unsigned char>& zipData,cons
 
 bool MinecraftUpdater::ExtractZipFromFile(const std::string& zipFilePath,const std::string& extractPath) {
     g_logger<<"[INFO] 开始解压文件: "<<zipFilePath<<" 到 "<<extractPath<<std::endl;
+
     if(!std::filesystem::exists(zipFilePath)) {
-        g_logger<<"[ERROR] ZIP文件不存在: "<<zipFilePath<<std::endl;
-        return false;
-    }
-    std::error_code ec;
-    auto fileSize=std::filesystem::file_size(zipFilePath,ec);
-    if(ec||fileSize==0) {
-        g_logger<<"[ERROR] ZIP文件无效或为空: "<<zipFilePath<<std::endl;
+        g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
         return false;
     }
 
-    g_logger<<"[INFO] ZIP文件大小: "<<FormatBytes(fileSize)<<std::endl;
+    std::error_code ec;
+    auto fileSize=std::filesystem::file_size(zipFilePath,ec);
+    if(ec||fileSize==0) {
+        g_logger<<"[ERROR] ZIP 文件无效或为空: "<<zipFilePath<<std::endl;
+        return false;
+    }
+
+    g_logger<<"[INFO] ZIP 文件大小: "<<FormatBytes(fileSize)<<std::endl;
+
     return ExtractZipWithMiniz(zipFilePath,extractPath);
 }
 
 bool MinecraftUpdater::ExtractZipWithMiniz(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 尝试使用miniz解压..."<<std::endl;
-
+    g_logger<<"[INFO] 调用 miniz 解压方法..."<<std::endl;
     return ExtractZipSimple(zipFilePath,extractPath);
 }
 
 bool MinecraftUpdater::ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath) {
     g_logger<<"[INFO] 使用简单解压方法..."<<std::endl;
-    if(!std::filesystem::exists(extractPath)) {
-        try {
-            std::filesystem::create_directories(extractPath);
-            g_logger<<"[INFO] 创建解压目录: "<<extractPath<<std::endl;
+
+    g_logger<<"[INFO] 尝试使用 Windows 系统命令解压..."<<std::endl;
+    if(ExtractZipWithSystemCommand(zipFilePath,extractPath)) {
+        g_logger<<"[INFO] Windows 系统命令解压成功"<<std::endl;
+        if(ValidateExtraction(extractPath)) {
+            return true;
         }
-        catch(const std::exception& e) {
-            g_logger<<"[ERROR] 无法创建解压目录: "<<e.what()<<std::endl;
+        else {
+            g_logger<<"[WARN] Windows 系统命令解压验证失败，尝试备用方案"<<std::endl;
+            CleanupTempExtractDir(extractPath);
+        }
+    }
+    else {
+        g_logger<<"[WARN] Windows 系统命令解压失败，尝试备用方案"<<std::endl;
+    }
+
+    g_logger<<"[INFO] 尝试使用原始 libzip 解压..."<<std::endl;
+    if(ExtractZipOriginal(zipFilePath,extractPath)) {
+        g_logger<<"[INFO] libzip 解压成功"<<std::endl;
+        if(ValidateExtraction(extractPath)) {
+            return true;
+        }
+        else {
+            g_logger<<"[WARN] libzip 解压验证失败"<<std::endl;
+            CleanupTempExtractDir(extractPath);
             return false;
         }
     }
-    return ExtractZipWithSystemCommand(zipFilePath,extractPath);
+    else {
+        g_logger<<"[ERROR] libzip 解压失败"<<std::endl;
+        CleanupTempExtractDir(extractPath);
+        return false;
+    }
 }
-bool MinecraftUpdater::ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 使用Windows系统命令解压..."<<std::endl;
 
-    std::string command="powershell -Command \"Expand-Archive -Path '"+zipFilePath+"' -DestinationPath '"+extractPath+"' -Force\"";
+bool MinecraftUpdater::ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 使用 Windows 系统命令解压..."<<std::endl;
+    if(!std::filesystem::exists(zipFilePath)) {
+        g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
+        return false;
+    }
+    EnsureDirectoryExists(extractPath);
+
+    std::string command;
+    command="powershell -Command \"Expand-Archive -Path '"+zipFilePath+
+        "' -DestinationPath '"+extractPath+"' -Force -ErrorAction Stop\"";
 
     g_logger<<"[DEBUG] 执行命令: "<<command<<std::endl;
 
     STARTUPINFOA si={0};
     PROCESS_INFORMATION pi={0};
     si.cb=sizeof(si);
+    si.dwFlags=STARTF_USESHOWWINDOW;
+    si.wShowWindow=SW_HIDE;
 
-    if(CreateProcessA(NULL,(LPSTR)command.c_str(),NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi)) {
-        WaitForSingleObject(pi.hProcess,INFINITE);
-        DWORD exitCode;
-        GetExitCodeProcess(pi.hProcess,&exitCode);
+    if(CreateProcessA(NULL,(LPSTR)command.c_str(),NULL,NULL,FALSE,
+        CREATE_NO_WINDOW|CREATE_UNICODE_ENVIRONMENT,
+        NULL,NULL,&si,&pi)) {
+        DWORD waitResult=WaitForSingleObject(pi.hProcess,60000);
+
+        DWORD exitCode=1;
+        if(waitResult==WAIT_OBJECT_0) {
+            GetExitCodeProcess(pi.hProcess,&exitCode);
+        }
+        else if(waitResult==WAIT_TIMEOUT) {
+            g_logger<<"[ERROR] 解压命令超时"<<std::endl;
+            TerminateProcess(pi.hProcess,1);
+            exitCode=1;
+        }
+        else {
+            g_logger<<"[ERROR] 等待解压进程失败，等待结果: "<<waitResult<<std::endl;
+            exitCode=1;
+        }
+
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
 
         if(exitCode==0) {
-            g_logger<<"[INFO] 系统命令解压成功"<<std::endl;
+            g_logger<<"[INFO] Windows 系统命令解压成功"<<std::endl;
             return true;
         }
         else {
-            g_logger<<"[ERROR] 系统命令解压失败，退出代码: "<<exitCode<<std::endl;
+            g_logger<<"[ERROR] Windows 系统命令解压失败，退出代码: "<<exitCode<<std::endl;
             return false;
         }
     }
@@ -1764,7 +1813,7 @@ bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,cons
         return false;
     }
 
-    g_logger<<"[INFO] 开始处理增量更新:"<<localVersion<<" -> "<<remoteVersion<<std::endl;
+    g_logger<<"[INFO] 开始处理增量更新: "<<localVersion<<" -> "<<remoteVersion<<std::endl;
 
     std::vector<std::string> packagePaths=GetUpdatePackagePath(packages,localVersion,remoteVersion);
 
@@ -1803,26 +1852,28 @@ bool MinecraftUpdater::ApplyIncrementalUpdate(const Json::Value& updateInfo,cons
         std::string tempZip=tempDir+"/mc_pkg_"+std::to_string(i)+".zip";
 
         g_logger<<"[INFO] 开始下载更新包..."<<std::endl;
+        std::string progressMessage="下载更新包 "+std::to_string(i+1)+"/"+std::to_string(packagePaths.size());
+        ShowProgressBar(progressMessage,0,1);
 
-        if(!httpClient.DownloadFileWithProgress(packagePath,tempZip,
-            [this,i](long long downloaded,long long total,void* userdata) {
-                std::cout<<"\r下载包 "<<(i+1)<<": ";
-                if(total>0) {
-                    int percent=static_cast<int>(downloaded*100/total);
-                    std::cout<<percent<<"% ("<<FormatBytes(downloaded)<<"/"<<FormatBytes(total)<<")     ";
+        bool downloadSuccess=httpClient.DownloadFileWithProgress(
+            packagePath,
+            tempZip,
+            [this,progressMessage,expectedSize](long long downloaded,long long total,void* userdata) {
+                if(total<=0&&expectedSize>0) {
+                    total=expectedSize;
                 }
-                else {
-                    std::cout<<FormatBytes(downloaded)<<" 已下载     ";
-                }
-                std::cout.flush();
-            },nullptr)) {
+                ShowProgressBar(progressMessage,downloaded,total);
+            },
+            nullptr
+        );
 
-            std::cout<<std::endl;
+        ClearProgressLine();
+
+        if(!downloadSuccess) {
             g_logger<<"[ERROR] 下载更新包失败: "<<packagePath<<std::endl;
             return false;
         }
 
-        std::cout<<std::endl;
         g_logger<<"[INFO] 下载完成"<<std::endl;
 
         if(expectedSize>0) {
@@ -2089,7 +2140,6 @@ bool MinecraftUpdater::ApplyUpdateFromDirectory(const std::string& sourceDir) {
     const int BATCH_SIZE=50;
 
     try {
-#ifdef _WIN32
         std::wstring wideSourceDir=Utf8ToWide(sourceDir);
         std::wstring wideGameDir=Utf8ToWide(gameDirectory);
 
@@ -2125,36 +2175,6 @@ bool MinecraftUpdater::ApplyUpdateFromDirectory(const std::string& sourceDir) {
                 }
             }
         }
-#else
-        for(const auto& entry:std::filesystem::recursive_directory_iterator(sourceDir)) {
-            if(entry.is_regular_file()) {
-                std::string relativePath=std::filesystem::relative(entry.path(),sourceDir).string();
-                std::replace(relativePath.begin(),relativePath.end(),'\\','/');
-
-                std::string targetPath=gameDirectory+"/"+relativePath;
-
-                std::filesystem::path targetDir=std::filesystem::path(targetPath).parent_path();
-                EnsureDirectoryExists(targetDir.string());
-
-                try {
-                    std::filesystem::copy(entry.path(),targetPath,
-                        std::filesystem::copy_options::overwrite_existing);
-
-                    fileCount++;
-
-                    if(fileCount%BATCH_SIZE==0) {
-                        OptimizeMemoryUsage();
-                        std::cout<<"\r应用更新: "<<fileCount<<" 个文件已处理     ";
-                        std::cout.flush();
-                    }
-                }
-                catch(const std::exception& e) {
-                    failedCount++;
-                    g_logger<<"[ERROR] 更新文件失败: "<<relativePath<<" - "<<e.what()<<std::endl;
-                }
-            }
-        }
-#endif
 
         std::cout<<"\r应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
         g_logger<<"[INFO] 应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<std::endl;
@@ -2171,6 +2191,7 @@ bool MinecraftUpdater::ApplyUpdateFromDirectory(const std::string& sourceDir) {
         return false;
     }
 }
+
 bool MinecraftUpdater::CopyFileWithUnicode(const std::wstring& sourcePath,const std::wstring& targetPath) {
     BOOL result=CopyFileW(sourcePath.c_str(),targetPath.c_str(),FALSE);
 
@@ -2195,6 +2216,7 @@ bool MinecraftUpdater::CopyFileWithUnicode(const std::wstring& sourcePath,const 
 
     return true;
 }
+
 void MinecraftUpdater::OptimizeMemoryUsage() {
     static int callCount=0;
     callCount++;
@@ -2204,5 +2226,89 @@ void MinecraftUpdater::OptimizeMemoryUsage() {
         if(heap) {
             HeapCompact(heap,HEAP_NO_SERIALIZE);
         }
+    }
+}
+
+void MinecraftUpdater::CleanupTempExtractDir(const std::string& extractPath) {
+    g_logger<<"[INFO] 清理临时解压目录..."<<std::endl;
+    if(!extractPath.empty()&&std::filesystem::exists(extractPath)) {
+        try {
+            std::string tempDir=std::filesystem::temp_directory_path().string();
+            if(extractPath.find(tempDir)==0) {
+                std::filesystem::remove_all(extractPath);
+                g_logger<<"[INFO] 已清理临时解压目录: "<<extractPath<<std::endl;
+            }
+            else {
+                g_logger<<"[INFO] 保留非临时目录: "<<extractPath<<std::endl;
+            }
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[WARN] 无法清理解压目录: "<<e.what()<<std::endl;
+        }
+    }
+    else {
+        g_logger<<"[INFO] 解压目录不存在或为空，无需清理"<<std::endl;
+    }
+}
+
+void MinecraftUpdater::CleanupTempFiles(const std::string& zipFilePath,const std::string& extractPath) {
+    g_logger<<"[INFO] 清理所有临时文件..."<<std::endl;
+    if(!zipFilePath.empty()&&std::filesystem::exists(zipFilePath)) {
+        try {
+            std::filesystem::remove(zipFilePath);
+            g_logger<<"[INFO] 已清理临时 ZIP 文件: "<<zipFilePath<<std::endl;
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[WARN] 无法删除临时 ZIP 文件: "<<e.what()<<std::endl;
+        }
+    }
+    CleanupTempExtractDir(extractPath);
+}
+
+bool MinecraftUpdater::ValidateExtraction(const std::string& extractPath) {
+    g_logger<<"[INFO] 验证解压结果..."<<std::endl;
+
+    if(!std::filesystem::exists(extractPath)) {
+        g_logger<<"[ERROR] 解压目录不存在: "<<extractPath<<std::endl;
+        return false;
+    }
+
+    try {
+        int fileCount=0;
+        int dirCount=0;
+        for(const auto& entry:std::filesystem::recursive_directory_iterator(extractPath)) {
+            if(entry.is_directory()) {
+                dirCount++;
+            }
+            else if(entry.is_regular_file()) {
+                fileCount++;
+                try {
+                    auto fileSize=std::filesystem::file_size(entry.path());
+                    if(fileSize==0) {
+                        g_logger<<"[WARN] 发现空文件: "<<entry.path().string()<<std::endl;
+                    }
+                }
+                catch(...) {
+                }
+            }
+        }
+
+        g_logger<<"[INFO] 解压验证: 总共 "<<(fileCount+dirCount)<<" 个条目 ("
+            <<fileCount<<" 个文件, "<<dirCount<<" 个目录)"<<std::endl;
+
+        if(fileCount==0&&dirCount==0) {
+            g_logger<<"[WARN] 解压目录为空，可能解压失败"<<std::endl;
+            return false;
+        }
+
+        if(fileCount+dirCount<3) {
+            g_logger<<"[WARN] 解压条目数量较少，可能未完全解压"<<std::endl;
+        }
+
+        return true;
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 验证解压结果失败: "<<e.what()<<std::endl;
+        return false;
     }
 }
