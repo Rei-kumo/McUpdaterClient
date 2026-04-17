@@ -1,16 +1,16 @@
-#include "ConfigManager.h"
+ï»¿#include "ConfigManager.h"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
 
 ConfigManager::ConfigManager(const std::string& configPath):configPath(configPath),configLoaded(false) {
     if(configPath.empty()) {
-        g_logger<<"[ERROR]ÅäÖÃÎÄ¼þÂ·¾¶Îª¿Õ!"<<std::endl;
+        g_logger<<"[ERROR]é…ç½®æ–‡ä»¶è·¯å¾„ä¸ºç©º!"<<std::endl;
         return;
     }
 
     if(!EnsureConfigDirectory()) {
-        g_logger<<"[ERROR]ÎÞ·¨´´½¨ÅäÖÃÄ¿Â¼"<<std::endl;
+        g_logger<<"[ERROR]æ— æ³•åˆ›å»ºé…ç½®ç›®å½•"<<std::endl;
         return;
     }
 
@@ -24,13 +24,13 @@ ConfigManager::~ConfigManager() {
 
 bool ConfigManager::LoadConfig() {
     if(configPath.empty()) {
-        g_logger<<"[ERROR]ÅäÖÃÎÄ¼þÂ·¾¶Îª¿Õ"<<std::endl;
+        g_logger<<"[ERROR]é…ç½®æ–‡ä»¶è·¯å¾„ä¸ºç©º"<<std::endl;
         return false;
     }
 
     std::ifstream file(configPath);
     if(!file.is_open()) {
-        g_logger<<"[WARN]ÎÞ·¨´ò¿ªÅäÖÃÎÄ¼þ: "<<configPath<<std::endl;
+        g_logger<<"[WARN]æ— æ³•æ‰“å¼€é…ç½®æ–‡ä»¶: "<<configPath<<std::endl;
         return false;
     }
 
@@ -38,7 +38,7 @@ bool ConfigManager::LoadConfig() {
     std::string errors;
 
     if(!Json::parseFromStream(reader,file,&cachedConfig,&errors)) {
-        g_logger<<"[ERROR]ÅäÖÃ½âÎö´íÎó: "<<errors<<std::endl;
+        g_logger<<"[ERROR]é…ç½®è§£æžé”™è¯¯: "<<errors<<std::endl;
         file.close();
         return false;
     }
@@ -113,7 +113,7 @@ std::string ConfigManager::ReadHashAlgorithm() {
     if(config.isMember("hash_algorithm")) {
         return config["hash_algorithm"].asString();
     }
-    return "md5";
+    return "sha256";
 }
 
 bool ConfigManager::ReadEnableFileDeletion() {
@@ -192,17 +192,17 @@ bool ConfigManager::ConfigExists(){
 
 bool ConfigManager::InitializeDefaultConfig(){
     if(!EnsureConfigDirectory()){
-        g_logger<<"[ERROR]ÎÞ·¨´´½¨ÅäÖÃÄ¿Â¼"<<std::endl;
+        g_logger<<"[ERROR]æ— æ³•åˆ›å»ºé…ç½®ç›®å½•"<<std::endl;
         return false;
     }
 
     Json::Value defaultConfig=CreateDefaultConfig();
     bool result=WriteConfig(defaultConfig);
     if(result){
-        g_logger<<"[ÐÅÏ¢]ÒÑ´´½¨Ä¬ÈÏÅäÖÃÎÄ¼þ:"<<configPath<<std::endl;
+        g_logger<<"[ä¿¡æ¯]å·²åˆ›å»ºé»˜è®¤é…ç½®æ–‡ä»¶:"<<configPath<<std::endl;
     }
     else{
-        g_logger<<"[ERROR]´´½¨Ä¬ÈÏÅäÖÃÎÄ¼þÊ§°Ü"<<std::endl;
+        g_logger<<"[ERROR]åˆ›å»ºé»˜è®¤é…ç½®æ–‡ä»¶å¤±è´¥"<<std::endl;
     }
     return result;
 }
@@ -216,7 +216,7 @@ Json::Value ConfigManager::CreateDefaultConfig(){
     config["auto_update"]=true;
     config["log_file"]="./logs/updater.log";
     config["update_mode"]="version";
-    config["hash_algorithm"]="md5";
+    config["hash_algorithm"]="sha256";
     config["enable_file_deletion"]=true;
     config["skip_major_version_check"]=false;
     config["enable_api_cache"]=true;
@@ -244,13 +244,13 @@ bool ConfigManager::WriteConfig(const Json::Value& config){
     }
 
     if(configPath.empty()) {
-        g_logger<<"[ERROR]ÅäÖÃÎÄ¼þÂ·¾¶Îª¿Õ"<<std::endl;
+        g_logger<<"[ERROR]é…ç½®æ–‡ä»¶è·¯å¾„ä¸ºç©º"<<std::endl;
         return false;
     }
 
     std::ofstream file(configPath);
     if(!file.is_open()){
-        g_logger<<"[ERROR]ÎÞ·¨´ò¿ªÅäÖÃÎÄ¼þ½øÐÐÐ´Èë: "<<configPath<<std::endl;
+        g_logger<<"[ERROR]æ— æ³•æ‰“å¼€é…ç½®æ–‡ä»¶è¿›è¡Œå†™å…¥: "<<configPath<<std::endl;
         return false;
     }
 

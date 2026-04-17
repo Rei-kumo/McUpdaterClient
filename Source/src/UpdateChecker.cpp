@@ -1,4 +1,4 @@
-#include "UpdateChecker.h"
+ï»¿#include "UpdateChecker.h"
 #include <iostream>
 #include <sstream>
 
@@ -15,23 +15,23 @@ bool UpdateChecker::CheckForUpdates() {
     std::string localVersion=configManager.ReadVersion();
     std::string remoteVersion=updateInfo["version"].asString();
 
-    g_logger<<"[INFO] ±¾µØÓÎÏ·°æ±¾: "<<localVersion<<std::endl;
-    g_logger<<"[INFO] Ô¶³ÌÓÎÏ·°æ±¾: "<<remoteVersion<<std::endl;
+    g_logger<<"[INFO] æœ¬åœ°æ¸¸æˆç‰ˆæœ¬: "<<localVersion<<std::endl;
+    g_logger<<"[INFO] è¿œç¨‹æ¸¸æˆç‰ˆæœ¬: "<<remoteVersion<<std::endl;
 
     if(remoteVersion>localVersion) {
-        g_logger<<"[INFO] ·¢ÏÖÐÂ°æ±¾: "<<remoteVersion<<std::endl;
+        g_logger<<"[INFO] å‘çŽ°æ–°ç‰ˆæœ¬: "<<remoteVersion<<std::endl;
         DisplayChangelog(updateInfo["changelog"]);
         return true;
     }
     else {
-        g_logger<<"[INFO] µ±Ç°ÒÑÊÇ×îÐÂ°æ±¾"<<std::endl;
+        g_logger<<"[INFO] å½“å‰å·²æ˜¯æœ€æ–°ç‰ˆæœ¬"<<std::endl;
         return false;
     }
 }
 
 Json::Value UpdateChecker::FetchUpdateInfo() {
-    g_logger<<"[INFO]ÕýÔÚ´Ó·þÎñÆ÷»ñÈ¡¸üÐÂÐÅÏ¢: "<<updateUrl<<std::endl;
-    g_logger<<"[DEBUG]µ±Ç°»º´æ×´Ì¬: "<<(enableApiCache?"ÆôÓÃAPI»º´æ":"½ûÓÃAPI»º´æ")<<std::endl;
+    g_logger<<"[INFO]æ­£åœ¨ä»ŽæœåŠ¡å™¨èŽ·å–æ›´æ–°ä¿¡æ¯: "<<updateUrl<<std::endl;
+    g_logger<<"[DEBUG]å½“å‰ç¼“å­˜çŠ¶æ€: "<<(enableApiCache?"å¯ç”¨APIç¼“å­˜":"ç¦ç”¨APIç¼“å­˜")<<std::endl;
 
     Json::CharReaderBuilder reader;
     reader.settings_["maxDocumentSize"]=10*1024*1024;
@@ -39,17 +39,17 @@ Json::Value UpdateChecker::FetchUpdateInfo() {
 
     std::string jsonResponse=httpClient.Get(updateUrl);
     if(jsonResponse.empty()) {
-        g_logger<<"[ERROR]´íÎó: »ñÈ¡¸üÐÂÐÅÏ¢·µ»ØÎª¿Õ"<<std::endl;
+        g_logger<<"[ERROR]é”™è¯¯: èŽ·å–æ›´æ–°ä¿¡æ¯è¿”å›žä¸ºç©º"<<std::endl;
         return Json::Value();
     }
 
     if(jsonResponse.size()>10*1024*1024) {
-        g_logger<<"[WARN]¾¯¸æ: JSONÏìÓ¦¹ý´ó ("<<(jsonResponse.size()/1024/1024)<<"MB)£¬¿ÉÄÜÓ°ÏìÐÔÄÜ"<<std::endl;
+        g_logger<<"[WARN]è­¦å‘Š: JSONå“åº”è¿‡å¤§ ("<<(jsonResponse.size()/1024/1024)<<"MB)ï¼Œå¯èƒ½å½±å“æ€§èƒ½"<<std::endl;
     }
 
     Json::Value updateInfo;
     if(!ParseUpdateInfo(jsonResponse,updateInfo)) {
-        g_logger<<"[ERROR]´íÎó: ½âÎö¸üÐÂÐÅÏ¢Ê§°Ü"<<std::endl;
+        g_logger<<"[ERROR]é”™è¯¯: è§£æžæ›´æ–°ä¿¡æ¯å¤±è´¥"<<std::endl;
         return Json::Value();
     }
 
@@ -65,24 +65,24 @@ bool UpdateChecker::ParseUpdateInfo(const std::string& jsonData,Json::Value& upd
         return true;
     }
     else {
-        g_logger<<"[ERROR]JSON½âÎö´íÎó: "<<errors<<std::endl;
+        g_logger<<"[ERROR]JSONè§£æžé”™è¯¯: "<<errors<<std::endl;
         return false;
     }
 }
 
 void UpdateChecker::DisplayChangelog(const Json::Value& changelog) {
     if(changelog.isNull()||!changelog.isArray()) {
-        g_logger<<"[INFO]ÔÝÎÞ¸üÐÂÈÕÖ¾"<<std::endl;
+        g_logger<<"[INFO]æš‚æ— æ›´æ–°æ—¥å¿—"<<std::endl;
         return;
     }
 
-    std::cout<<"\n=== ¸üÐÂÄÚÈÝ ==="<<std::endl;
+    std::cout<<"\n=== æ›´æ–°å†…å®¹ ==="<<std::endl;
     for(const auto& change:changelog) {
         std::cout<<"- "<<change.asString()<<std::endl;
     }
     std::cout<<"================\n"<<std::endl;
 
-    g_logger<<"[INFO]¸üÐÂÄÚÈÝ:"<<std::endl;
+    g_logger<<"[INFO]æ›´æ–°å†…å®¹:"<<std::endl;
     for(const auto& change:changelog) {
         g_logger<<"[INFO]  - "<<change.asString()<<std::endl;
     }

@@ -1,4 +1,4 @@
-#include "FileHasher.h"
+ï»¿#include "FileHasher.h"
 #include <fstream>
 #include <filesystem>
 #include <sstream>
@@ -85,7 +85,7 @@ std::string FileHasher::SHA256Hash(const std::vector<unsigned char>& data) {
 	}
 	return ss.str();
 }
-// ÔÚFileHasherÀàÖĞÌí¼Ó
+// åœ¨FileHasherç±»ä¸­æ·»åŠ 
 std::string FileHasher::CalculateFileHashStream(const std::string& filePath,const std::string& algorithm) {
     std::ifstream file(filePath,std::ios::binary);
     if(!file) {

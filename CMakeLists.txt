@@ -81,13 +81,19 @@ endif()
 
 add_executable(McUpdaterClient
     ${SOURCE_DIR}/main.cpp
-    ${SOURCE_DIR}/MinecraftUpdater.cpp
+    
     ${SOURCE_DIR}/UpdateChecker.cpp
     ${SOURCE_DIR}/ConfigManager.cpp
     ${SOURCE_DIR}/HttpClient.cpp
     ${SOURCE_DIR}/FileHasher.cpp
     ${SOURCE_DIR}/logger.cpp
-    ${SOURCE_DIR}/SelfUpdater.cpp)
+    ${SOURCE_DIR}/SelfUpdater.cpp 
+    ${SOURCE_DIR}/FileSystemHelper.cpp
+    ${SOURCE_DIR}/ZipExtractor.cpp 
+    ${SOURCE_DIR}/HashBasedFileSyncer.cpp
+    ${SOURCE_DIR}/IncrementalUpdatePlanner.cpp
+    ${SOURCE_DIR}/ProgressReporter.cpp
+    ${SOURCE_DIR}/UpdateOrchestrator.cpp)
 
 target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}
