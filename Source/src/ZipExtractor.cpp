@@ -51,15 +51,24 @@ bool ZipExtractor::ExtractZip(const std::vector<unsigned char>& zipData,const st
 bool ZipExtractor::ExtractZipFromFile(const std::string& zipFilePath,const std::string& extractPath) {
     g_logger<<"[INFO] 开始解压文件: "<<zipFilePath<<" 到 "<<extractPath<<std::endl;
 
-    if(!std::filesystem::exists(zipFilePath)) {
-        g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
+    std::error_code ec;
+    if(!std::filesystem::exists(zipFilePath,ec)) {
+        if(ec) {
+            g_logger<<"[ERROR] 检查ZIP文件存在性失败: "<<ec.message()<<std::endl;
+        }
+        else {
+            g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
+        }
         return false;
     }
 
-    std::error_code ec;
     auto fileSize=std::filesystem::file_size(zipFilePath,ec);
-    if(ec||fileSize==0) {
-        g_logger<<"[ERROR] ZIP 文件无效或为空: "<<zipFilePath<<std::endl;
+    if(ec) {
+        g_logger<<"[ERROR] 无法获取ZIP文件大小: "<<ec.message()<<std::endl;
+        return false;
+    }
+    if(fileSize==0) {
+        g_logger<<"[ERROR] ZIP 文件为空: "<<zipFilePath<<std::endl;
         return false;
     }
 
@@ -270,6 +279,10 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             failedFiles++;
             continue;
         }
+        struct ZipFileCloser {
+            zip_file_t* file;
+            ~ZipFileCloser() { if(file) zip_fclose(file); }
+        } closer{zfile};
 
         std::string safeName=originalName;
         std::string fullPath;
@@ -450,10 +463,12 @@ bool ZipExtractor::CheckServerResponse(const std::string& url) {
 }
 bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& relativePath,const std::string& targetBaseDir) {
     g_logger<<"[INFO] 下载并解压: "<<url<<" -> "<<relativePath<<std::endl;
-    std::string tempDir=std::filesystem::temp_directory_path().string();
-    std::string tempZip=tempDir+"/mc_temp_"+
-        std::to_string(GetCurrentProcessId())+"_"+
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".zip";
+
+    DWORD pid=GetCurrentProcessId();
+    auto timestamp=std::chrono::steady_clock::now().time_since_epoch().count();
+    std::string tempZip=(std::filesystem::temp_directory_path()/
+        ("minecraft_update_"+std::to_string(pid)+"_"+std::to_string(timestamp)+".zip")).string();
+
     std::string progressMessage="下载 "+relativePath;
     pRepoter.ShowProgressBar(progressMessage,0,1);
 

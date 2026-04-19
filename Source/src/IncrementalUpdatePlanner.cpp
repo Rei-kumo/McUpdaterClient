@@ -155,10 +155,7 @@ std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Js
     return {};
 }
 bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateInfo,const std::string& localVersion,const std::string& remoteVersion) {
-    updateOrchestrator.cachedUpdateInfo=Json::Value();
-    updateOrchestrator.hasCachedUpdateInfo=false;
-
-    Json::Value().swap(updateOrchestrator.cachedUpdateInfo);
+    updateOrchestrator.ClearCachedUpdateInfo();
 
     const Json::Value& packages=updateInfo["incremental_packages"];
     if(!packages.isArray()||packages.size()==0) {
@@ -201,8 +198,10 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
         std::string expectedHash=packageInfo["hash"].asString();
         long long expectedSize=packageInfo.isMember("size")?packageInfo["size"].asInt64():0;
 
+        DWORD pid=GetCurrentProcessId();
+        auto timestamp=std::chrono::steady_clock::now().time_since_epoch().count();
         std::string tempDir=std::filesystem::temp_directory_path().string();
-        std::string tempZip=tempDir+"/mc_pkg_"+std::to_string(i)+".zip";
+        std::string tempZip=tempDir+"/mc_pkg_"+std::to_string(pid)+"_"+std::to_string(timestamp)+"_"+std::to_string(i)+".zip";
 
         g_logger<<"[INFO] 开始下载更新包..."<<std::endl;
         std::string progressMessage="下载更新包 "+std::to_string(i+1)+"/"+std::to_string(packagePaths.size());
@@ -254,7 +253,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
             }
         }
 
-        std::string tempExtractDir=tempDir+"/mc_extract_"+std::to_string(i);
+        std::string tempExtractDir=tempDir+"/mc_extract_"+std::to_string(pid)+"_"+std::to_string(timestamp)+"_"+std::to_string(i);
         fsHelper.EnsureDirectoryExists(tempExtractDir);
 
         g_logger<<"[INFO] 解压更新包..."<<std::endl;
@@ -333,24 +332,24 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
 
         // 根据类型执行操作
         if(type=="A"||type=="M") {
-            // 新增或修改：从临时目录复制文件到目标路径
             std::string sourceFile=tempDir+"/"+path;
-            std::string targetFile=updateOrchestrator.gameDirectory+"/"+path;
+            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;
 
             fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
 
             if(std::filesystem::exists(sourceFile)) {
-                try {
-                    std::filesystem::copy_file(sourceFile,targetFile,
-                        std::filesystem::copy_options::overwrite_existing);
+                std::error_code ec;
+                std::filesystem::copy_file(sourceFile,targetFile,
+                    std::filesystem::copy_options::overwrite_existing,ec);
+                if(ec) {
+                    g_logger<<"[ERROR] 复制文件失败: "<<sourceFile<<" -> "<<targetFile
+                        <<" - "<<ec.message()<<std::endl;
+                    failCount++;
+                }
+                else {
                     g_logger<<"[INFO] "<<(type=="A"?"新增":"修改")
                         <<"文件: "<<path<<std::endl;
                     successCount++;
-                }
-                catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 复制文件失败: "<<sourceFile
-                        <<" -> "<<targetFile<<" - "<<e.what()<<std::endl;
-                    failCount++;
                 }
             }
             else {
@@ -360,7 +359,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         }
         else if(type=="D") {
             // 删除文件
-            std::string targetFile=updateOrchestrator.gameDirectory+"/"+path;
+            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;
             if(std::filesystem::exists(targetFile)) {
                 try {
                     std::filesystem::remove(targetFile);
@@ -387,8 +386,8 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 continue;
             }
             std::string sourceFile=tempDir+"/"+path;          // 新文件在临时目录中
-            std::string targetFile=updateOrchestrator.gameDirectory+"/"+path;    // 新位置
-            std::string oldTargetFile=updateOrchestrator.gameDirectory+"/"+oldPath; // 旧文件
+            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;    // 新位置
+            std::string oldTargetFile=updateOrchestrator.GetGameDirectory()+"/"+oldPath; // 旧文件
 
             fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
 
@@ -427,7 +426,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         }
         else if(type=="AD") {
             // 新增空目录
-            std::string targetDir=updateOrchestrator.gameDirectory+"/"+path;
+            std::string targetDir=updateOrchestrator.GetGameDirectory()+"/"+path;
             try {
                 if(!std::filesystem::exists(targetDir)) {
                     std::filesystem::create_directories(targetDir);
@@ -446,7 +445,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         }
         else if(type=="DD") {
             // 删除空目录
-            std::string targetDir=updateOrchestrator.gameDirectory+"/"+path;
+            std::string targetDir=updateOrchestrator.GetGameDirectory()+"/"+path;
             if(std::filesystem::exists(targetDir)&&std::filesystem::is_directory(targetDir)) {
                 try {
                     // 仅删除空目录（如果目录非空，可能因为文件残留而失败）
@@ -493,7 +492,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
 
     try {
         std::wstring wideSourceDir=fsHelper.Utf8ToWide(sourceDir);
-        std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.gameDirectory);
+        std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
 
         if(wideSourceDir.empty()||wideGameDir.empty()) {
             g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;
@@ -548,7 +547,7 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
     int failedCount=0;
 
     std::wstring wideTempDir=fsHelper.Utf8ToWide(tempDir);
-    std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.gameDirectory);
+    std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
 
     if(wideTempDir.empty()||wideGameDir.empty()) {
         g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;

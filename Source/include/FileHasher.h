@@ -8,7 +8,6 @@
 
 class FileHasher {
 public:
-	static std::string CalculateFileHash(const std::string& filePath,const std::string& algorithm);
 	static std::string CalculateMemoryHash(const std::vector<unsigned char>& data,const std::string& algorithm);
 	static std::string CalculateDirectoryHash(const std::string& directoryPath,const std::string& algorithm);
 	static std::string CalculateFileHashStream(const std::string& filePath,const std::string& algorithm);

@@ -21,15 +21,20 @@ public:
     bool ForceUpdate(bool forceSync=false);
     bool SyncFiles(const Json::Value& fileList,bool forceSync);
     void OptimizeMemoryUsage();
-    Json::Value cachedUpdateInfo;
-    bool hasCachedUpdateInfo; 
-    std::string gameDirectory;
+
+    const std::string& GetGameDirectory() const { return gameDirectory; }
+    Json::Value GetCachedUpdateInfo() const { return cachedUpdateInfo; }
+    bool HasCachedUpdateInfo() const { return hasCachedUpdateInfo; }
+    void SetCachedUpdateInfo(const Json::Value& info) { cachedUpdateInfo=info; hasCachedUpdateInfo=true; }
+    void ClearCachedUpdateInfo() { cachedUpdateInfo=Json::Value(); hasCachedUpdateInfo=false; }
 private:
     bool ProcessLauncherUpdate(const Json::Value& updateInfo);
     bool CheckAndApplyLauncherUpdate();
     bool CheckForUpdatesByHash();
     void UpdateLocalVersion(const std::string& newVersion);
-
+    Json::Value cachedUpdateInfo;
+    bool hasCachedUpdateInfo;
+    std::string gameDirectory;
     ConfigManager configManager;
 
     HttpClient httpClient;

@@ -26,8 +26,7 @@ public:
         const std::string& expectedHash="",
         const std::string& expectedVersion="");
     bool ApplyUpdate();
-    void CancelUpdate();
-
+    static std::wstring GetCurrentExePathW();
     long long GetDownloadedBytes() const { return downloadedBytes; }
     long long GetTotalBytes() const { return totalBytes; }
     bool IsDownloading() const { return downloading; }
@@ -35,7 +34,11 @@ public:
     static std::string GetCurrentExePath();
 
 private:
-    static size_t DownloadProgressCallback(void* ptr,size_t size,size_t nmemb,void* userdata);
+    bool TryNormalReplace(const std::wstring& newExe,const std::wstring& targetExe);
+    bool RunElevatedReplace(const std::wstring& newExe,const std::wstring& targetExe);
+    void CleanupOldBackup(const std::wstring& currentExePath);
+    bool LaunchNewProcess(const std::wstring& exePath);
+    static std::wstring GetShortPathNameSafe(const std::wstring& longPath);
 };
 
 #endif

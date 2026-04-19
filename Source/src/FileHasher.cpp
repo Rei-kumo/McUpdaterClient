@@ -4,16 +4,6 @@
 #include <sstream>
 #include <iomanip>
 
-std::string FileHasher::CalculateFileHash(const std::string& filePath,const std::string& algorithm) {
-	std::ifstream file(filePath,std::ios::binary);
-	if(!file) {
-		return "";
-	}
-
-	std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(file),{});
-	return CalculateMemoryHash(buffer,algorithm);
-}
-
 std::string FileHasher::CalculateMemoryHash(const std::vector<unsigned char>& data,const std::string& algorithm) {
 	if(algorithm=="md5") {
 		return MD5Hash(data);
@@ -32,7 +22,7 @@ std::string FileHasher::CalculateDirectoryHash(const std::string& directoryPath,
 
 	for(const auto& entry:std::filesystem::recursive_directory_iterator(directoryPath)) {
 		if(entry.is_regular_file()) {
-			std::string fileHash=CalculateFileHash(entry.path().string(),algorithm);
+			std::string fileHash=CalculateFileHashStream(entry.path().string(),algorithm);
 			combinedContent+=entry.path().filename().string()+":"+fileHash+";";
 		}
 	}

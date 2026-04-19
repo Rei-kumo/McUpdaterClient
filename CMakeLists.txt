@@ -93,7 +93,7 @@ add_executable(McUpdaterClient
     ${SOURCE_DIR}/HashBasedFileSyncer.cpp
     ${SOURCE_DIR}/IncrementalUpdatePlanner.cpp
     ${SOURCE_DIR}/ProgressReporter.cpp
-    ${SOURCE_DIR}/UpdateOrchestrator.cpp)
+    ${SOURCE_DIR}/UpdateOrchestrator.cpp "Source/include/VersionCompare.h")
 
 target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}

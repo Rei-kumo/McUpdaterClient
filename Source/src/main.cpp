@@ -2,7 +2,37 @@
 #include <string>
 #include "ConfigManager.h"
 #include "UpdateOrchestrator.h"
-int main() {
+int main(int argc,char* argv[]) {
+    if(argc==4&&strcmp(argv[1],"--elevated-replace")==0) {
+        std::wstring newExe=FileSystemHelper::Utf8ToWide(argv[2]);
+        std::wstring targetExe=FileSystemHelper::Utf8ToWide(argv[3]);
+
+        for(int i=0; i<30; ++i) {
+            HANDLE h=CreateFileW(targetExe.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
+            if(h!=INVALID_HANDLE_VALUE) {
+                CloseHandle(h);
+                break;
+            }
+            Sleep(1000);
+        }
+
+        std::wstring backup=targetExe+L".old";
+        DeleteFileW(backup.c_str());
+        MoveFileW(targetExe.c_str(),backup.c_str());
+        if(MoveFileExW(newExe.c_str(),targetExe.c_str(),MOVEFILE_REPLACE_EXISTING)) {
+            DeleteFileW(backup.c_str());
+            STARTUPINFOW si={sizeof(si)};
+            PROCESS_INFORMATION pi;
+            CreateProcessW(targetExe.c_str(),NULL,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            return 0;
+        }
+        else {
+            MoveFileW(backup.c_str(),targetExe.c_str());
+            return 1;
+        }
+    }
     std::string cfg="config/updater.json";
 
     ConfigManager configManager(cfg);

@@ -34,9 +34,13 @@ void FileSystemHelper::EnsureDirectoryExists(const std::string& path) {
             }
         }
     }
+    catch(const std::filesystem::filesystem_error& e) {
+        g_logger<<"[ERROR] 创建目录失败: "<<path
+            <<" - 错误码: "<<e.code().message()
+            <<" (路径1: "<<e.path1()<<", 路径2: "<<e.path2()<<")"<<std::endl;
+    }
     catch(const std::exception& e) {
-        g_logger<<"[ERROR] 错误: 创建目录失败: "<<path<<" - "<<e.what()<<std::endl;
-        g_logger<<"[ERROR] 详细错误: "<<e.what()<<std::endl;
+        g_logger<<"[ERROR] 创建目录失败: "<<path<<" - "<<e.what()<<std::endl;
     }
 }
 
@@ -96,32 +100,51 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& directoryPath,con
     for(const auto& file:expectedFiles) {
         g_logger<<"[DEBUG]   - "<<file<<std::endl;
     }
+    std::error_code ec;
+    auto it=std::filesystem::recursive_directory_iterator(directoryPath,ec);
+    if(ec) {
+        g_logger<<"[ERROR] 无法打开目录迭代器: "<<directoryPath<<" - "<<ec.message()<<std::endl;
+        return;
+    }
 
-    try {
-        for(const auto& entry:std::filesystem::recursive_directory_iterator(directoryPath)) {
-            if(entry.is_regular_file()) {
-                std::string relativePath=std::filesystem::relative(entry.path(),directoryPath).string();
-                std::replace(relativePath.begin(),relativePath.end(),'\\','/');
+    const auto end=std::filesystem::recursive_directory_iterator();
+    while(it!=end) {
+        if(ec) {
+            g_logger<<"[ERROR] 迭代器状态无效: "<<ec.message()<<std::endl;
+            break;
+        }
 
-                g_logger<<"[DEBUG] 检查文件: "<<relativePath<<std::endl;
+        const auto& entry=*it;
+        if(entry.is_regular_file()) {
+            std::string relativePath=std::filesystem::relative(entry.path(),directoryPath,ec).string();
+            if(ec) {
+                g_logger<<"[ERROR] 计算相对路径失败: "<<entry.path().string()<<" - "<<ec.message()<<std::endl;
+                it.increment(ec);
+                continue;
+            }
+            std::replace(relativePath.begin(),relativePath.end(),'\\','/');
 
-                if(expectedFiles.find(relativePath)==expectedFiles.end()) {
-                    try {
-                        std::filesystem::remove(entry.path());
-                        g_logger<<"[INFO] 删除孤儿文件: "<<relativePath<<std::endl;
-                    }
-                    catch(const std::exception& e) {
-                        g_logger<<"[ERROR] 删除孤儿文件失败: "<<relativePath<<" - "<<e.what()<<std::endl;
-                    }
+            g_logger<<"[DEBUG] 检查文件: "<<relativePath<<std::endl;
+
+            if(expectedFiles.find(relativePath)==expectedFiles.end()) {
+                std::error_code remove_ec;
+                std::filesystem::remove(entry.path(),remove_ec);
+                if(!remove_ec) {
+                    g_logger<<"[INFO] 删除孤儿文件: "<<relativePath<<std::endl;
                 }
                 else {
-                    g_logger<<"[DEBUG] 文件在期望列表中，保留: "<<relativePath<<std::endl;
+                    g_logger<<"[ERROR] 删除孤儿文件失败: "<<relativePath<<" - "<<remove_ec.message()<<std::endl;
                 }
             }
+            else {
+                g_logger<<"[DEBUG] 文件在期望列表中，保留: "<<relativePath<<std::endl;
+            }
         }
-    }
-    catch(const std::exception& e) {
-        g_logger<<"[ERROR] 遍历目录失败: "<<directoryPath<<" - "<<e.what()<<std::endl;
+        it.increment(ec);
+        if(ec) {
+            g_logger<<"[ERROR] 迭代目录时出错: "<<ec.message()<<std::endl;
+            break;
+        }
     }
 }
 std::wstring FileSystemHelper::Utf8ToWide(const std::string& utf8Str) {

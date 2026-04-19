@@ -22,6 +22,7 @@
 #include "ZipExtractor.h"
 #include "HashBasedFileSyncer.h"
 #include "IncrementalUpdatePlanner.h"
+#include "VersionCompare.h"
 
 UpdateOrchestrator::UpdateOrchestrator(const std::string& config,const std::string& url,const std::string& gameDir)
     : configManager(config),
@@ -72,7 +73,7 @@ bool UpdateOrchestrator::CheckForUpdatesByHash() {
 
     bool isConsistent=hashSyncer.CheckFileConsistency(updateInfo["files"],updateInfo["directories"]);
 
-    if(remoteVersion>localVersion) {
+    if(IsNewerVersion(localVersion,remoteVersion)) {
         std::cout<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
 
         if(hashSyncer.ShouldForceHashUpdate(localVersion,remoteVersion)) {
@@ -88,7 +89,7 @@ bool UpdateOrchestrator::CheckForUpdatesByHash() {
             return false;
         }
     }
-    else if(remoteVersion==localVersion) {
+    else if(localVersion==remoteVersion) {
         if(!isConsistent) {
             g_logger<<"[INFO] 版本号相同但文件不一致，需要修复"<<std::endl;
             return true;
@@ -197,7 +198,7 @@ bool UpdateOrchestrator::CheckForUpdates() {
         std::string localVersion=configManager.ReadVersion();
         std::string remoteVersion=updateInfo["version"].asString();
 
-        if(remoteVersion>localVersion) {
+        if(IsNewerVersion(localVersion,remoteVersion)) {
             g_logger<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
             updateChecker.DisplayChangelog(updateInfo["changelog"]);
             return true;
@@ -529,7 +530,7 @@ bool UpdateOrchestrator::ProcessLauncherUpdate(const Json::Value& updateInfo) {
     std::string remoteVersion=launcherInfo["version"].asString();
     std::string localVersion=configManager.ReadLauncherVersion();
 
-    bool needsUpdate=(remoteVersion>localVersion);
+    bool needsUpdate=(IsNewerVersion(localVersion,remoteVersion));
 
     if(needsUpdate) {
         g_logger<<"[INFO] 检测到启动器更新："<<localVersion<<" -> "<<remoteVersion<<std::endl;

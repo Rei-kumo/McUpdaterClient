@@ -22,6 +22,7 @@
 #include "ConfigManager.h"
 #include "UpdateOrchestrator.h"
 #include "ZipExtractor.h"
+#include "VersionCompare.h"
 HashBasedFileSyncer::HashBasedFileSyncer(HttpClient& http,
     UpdateOrchestrator& orc,
     ProgressReporter& reporter,
@@ -66,7 +67,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
         std::string relativePath=fileInfo["path"].asString();
         std::string expectedHash=fileInfo["hash"].asString();
-        std::string fullPath=updateOrchestrator.gameDirectory+"/"+relativePath;
+        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+relativePath;
 
         totalChecked++;
         processedInBatch++;
@@ -78,7 +79,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             continue;
         }
 
-        std::string actualHash=FileHasher::CalculateFileHash(fullPath,hashAlgorithm);
+        std::string actualHash=FileHasher::CalculateFileHashStream(fullPath,hashAlgorithm);
         if(actualHash.empty()) {
             g_logger<<"[DEBUG] 无法计算文件哈希: "<<relativePath<<std::endl;
             allFilesConsistent=false;
@@ -93,7 +94,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
     for(const auto& dirInfo:directoryManifest) {
         std::string relativePath=dirInfo["path"].asString();
-        std::string fullPath=updateOrchestrator.gameDirectory+"/"+relativePath;
+        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+relativePath;
 
         if(!std::filesystem::exists(fullPath)) {
             g_logger<<"[DEBUG] 目录不存在: "<<relativePath<<std::endl;
@@ -120,7 +121,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
                 continue;
             }
 
-            std::string actualHash=FileHasher::CalculateFileHash(fileFullPath,hashAlgorithm);
+            std::string actualHash=FileHasher::CalculateFileHashStream(fileFullPath,hashAlgorithm);
             if(actualHash.empty()) {
                 g_logger<<"[DEBUG] 无法计算目录内文件哈希: "<<fileRelativePath<<std::endl;
                 allFilesConsistent=false;
@@ -172,7 +173,7 @@ bool HashBasedFileSyncer::SyncFilesByHash(const Json::Value& updateInfo) {
         if(!isEmpty) continue;
 
         std::string relativePath=dirInfo["path"].asString();
-        std::filesystem::path fullPath=std::filesystem::absolute(updateOrchestrator.gameDirectory)/relativePath;
+        std::filesystem::path fullPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory())/relativePath;
         if(!std::filesystem::exists(fullPath)) {
             try {
                 std::filesystem::create_directories(fullPath);
@@ -217,7 +218,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         std::cout<<std::endl;
         std::cout.flush();
 
-        std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.gameDirectory);
+        std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory());
         std::filesystem::path fullPath=gameDirPath/relativePath;
         std::string fullPathStr=fullPath.string();
 
@@ -248,7 +249,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         }
 
         if(std::filesystem::exists(fullPath)) {
-            std::string actualHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
+            std::string actualHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(!actualHash.empty()&&actualHash==expectedHash) {
                 g_logger<<"[INFO] 文件已是最新: "<<relativePath<<std::endl;
                 std::cout<<"  [已是最新]"<<std::endl;
@@ -310,16 +311,22 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         std::string sizeStr=ec?"未知大小":progressReporter.FormatBytes(actualSize);
 
         if(!expectedHash.empty()) {
-            std::string downloadedHash=FileHasher::CalculateFileHash(fullPathStr,hashAlgorithm);
+            std::string downloadedHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(downloadedHash!=expectedHash) {
-                std::cout<<"  [完成，大小: "<<sizeStr<<"，但哈希不匹配]"<<std::endl;
+                std::cout<<"[ERROR]哈希不匹配，删除文件"<<std::endl;
+                g_logger<<"[ERROR] 文件哈希不匹配: "<<relativePath
+                    <<" 期望 "<<expectedHash<<" 实际 "<<downloadedHash<<std::endl;
+                std::error_code removeEc;
+                std::filesystem::remove(fullPathStr,removeEc);
+                if(removeEc) {
+                    g_logger<<"[WARN] 删除损坏文件失败: "<<removeEc.message()<<std::endl;
+                }
+                allSuccess=false;
+                continue;
             }
             else {
                 std::cout<<"  [完成，大小: "<<sizeStr<<"，已验证]"<<std::endl;
             }
-        }
-        else {
-            std::cout<<"  [完成，大小: "<<sizeStr<<"]"<<std::endl;
         }
     }
 
@@ -338,7 +345,13 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         return false;
     }
 
-    std::string tempDir=std::filesystem::temp_directory_path().string()+"/mc_update_temp";
+    DWORD pid=GetCurrentProcessId();
+    std::string tempDir=(std::filesystem::temp_directory_path()/
+        ("mc_update_temp_"+std::to_string(pid))).string();
+
+    auto now=std::chrono::steady_clock::now().time_since_epoch().count();
+    tempDir+="_"+std::to_string(now);
+
     fsHelper.EnsureDirectoryExists(tempDir);
 
     if(!zipExtractor.ExtractZip(zipData,tempDir)) {
@@ -346,7 +359,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         return false;
     }
 
-    std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.gameDirectory);
+    std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory());
     std::string targetDir=(gameDirPath/relativePath).string();
     fsHelper.EnsureDirectoryExists(targetDir);
 
@@ -367,7 +380,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         }
 
         if(!expectedHash.empty()) {
-            std::string actualHash=FileHasher::CalculateFileHash(tempFilePath,hashAlgorithm);
+            std::string actualHash=FileHasher::CalculateFileHashStream(tempFilePath,hashAlgorithm);
             if(actualHash!=expectedHash) {
                 g_logger<<"[WARN] 解压文件哈希验证失败: "<<fileRelativePath<<std::endl;
                 g_logger<<"[WARN] 期望: "<<expectedHash<<std::endl;
@@ -411,7 +424,7 @@ bool HashBasedFileSyncer::ProcessDeleteList(const Json::Value& deleteList) {
 
     for(const auto& item:deleteList) {
         std::string path=item.asString();
-        std::string fullPath=updateOrchestrator.gameDirectory+"/"+path;
+        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+path;
 
         try {
             if(std::filesystem::exists(fullPath)) {
@@ -442,25 +455,13 @@ bool HashBasedFileSyncer::ShouldForceHashUpdate(const std::string& localVersion,
         return false;
     }
 
-    std::regex versionRegex(R"((\d+)\.(\d+)\.(\d+))");
-    std::smatch localMatch,remoteMatch;
-
-    if(std::regex_match(localVersion,localMatch,versionRegex)&&
-        std::regex_match(remoteVersion,remoteMatch,versionRegex)) {
-
-        int localMajor=std::stoi(localMatch[1]);
-        int remoteMajor=std::stoi(remoteMatch[1]);
-
-        if(localMajor!=remoteMajor) {
-            return true;
-        }
-
-        int localMinor=std::stoi(localMatch[2]);
-        int remoteMinor=std::stoi(remoteMatch[2]);
-
-        if(std::abs(remoteMinor-localMinor)>=3) {
-            return true;
-        }
+    Version local(localVersion);
+    Version remote(remoteVersion);
+    if(local.major!=remote.major) {
+        return true;
+    }
+    if(std::abs(remote.minor-local.minor)>=3) {
+        return true;
     }
 
     return false;

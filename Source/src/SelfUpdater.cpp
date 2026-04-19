@@ -1,4 +1,5 @@
 ﻿#include "SelfUpdater.h"
+#include "FileSystemHelper.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -7,6 +8,120 @@
 #include <limits.h>
 #include <winver.h>
 #include <thread>
+#include <random>
+
+std::wstring SelfUpdater::GetCurrentExePathW() {
+    wchar_t buffer[MAX_PATH];
+    GetModuleFileNameW(NULL,buffer,MAX_PATH);
+    return std::wstring(buffer);
+}
+
+std::wstring SelfUpdater::GetShortPathNameSafe(const std::wstring& longPath) {
+    wchar_t shortPath[MAX_PATH];
+    DWORD len=GetShortPathNameW(longPath.c_str(),shortPath,MAX_PATH);
+    if(len>0&&len<MAX_PATH) {
+        return std::wstring(shortPath);
+    }
+    if(longPath.find(L'&')!=std::wstring::npos||
+        longPath.find(L'|')!=std::wstring::npos||
+        longPath.find(L';')!=std::wstring::npos) {
+        g_logger<<"[ERROR] 路径包含危险字符，拒绝使用: "<<FileSystemHelper::WideToUtf8(longPath)<<std::endl;
+        return L"";
+    }
+    return longPath;
+}
+
+void SelfUpdater::CleanupOldBackup(const std::wstring& currentExePath) {
+    std::wstring backupPath=currentExePath+L".old";
+    if(std::filesystem::exists(backupPath)) {
+        std::error_code ec;
+        std::filesystem::remove(backupPath,ec);
+        if(!ec) {
+            g_logger<<"[INFO] 已清理旧版本备份: "<<FileSystemHelper::WideToUtf8(backupPath)<<std::endl;
+        }
+    }
+}
+
+bool SelfUpdater::TryNormalReplace(const std::wstring& newExe,const std::wstring& targetExe) {
+    std::wstring backup=targetExe+L".old";
+    DeleteFileW(backup.c_str());
+    MoveFileW(targetExe.c_str(),backup.c_str());
+    if(MoveFileExW(newExe.c_str(),targetExe.c_str(),MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileW(backup.c_str());
+        g_logger<<"[INFO] 普通权限替换成功"<<std::endl;
+        return true;
+    }
+
+    DWORD err=GetLastError();
+    g_logger<<"[WARN] 普通权限替换失败，错误码: "<<err<<"，尝试恢复备份..."<<std::endl;
+    MoveFileW(backup.c_str(),targetExe.c_str());
+    return false;
+}
+
+bool SelfUpdater::RunElevatedReplace(const std::wstring& newExe,const std::wstring& targetExe) {
+    std::wstring shortNew=GetShortPathNameSafe(newExe);
+    std::wstring shortTarget=GetShortPathNameSafe(targetExe);
+    if(shortNew.empty()||shortTarget.empty()) {
+        g_logger<<"[ERROR] 无法获取短路径名，提权替换中止"<<std::endl;
+        return false;
+    }
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::wstring unique=L"updater_"+std::to_wstring(GetCurrentProcessId())+L"_"+std::to_wstring(gen());
+    std::wstring tempDir=std::filesystem::temp_directory_path().wstring()+L"\\"+unique;
+    if(!std::filesystem::create_directory(tempDir)) {
+        g_logger<<"[ERROR] 创建临时目录失败"<<std::endl;
+        return false;
+    }
+    wchar_t selfPath[MAX_PATH];
+    GetModuleFileNameW(NULL,selfPath,MAX_PATH);
+    std::wstring helperExe=tempDir+L"\\helper.exe";
+    if(!CopyFileW(selfPath,helperExe.c_str(),FALSE)) {
+        g_logger<<"[ERROR] 复制辅助程序失败"<<std::endl;
+        std::filesystem::remove_all(tempDir);
+        return false;
+    }
+    std::wstring cmdLine=L"\""+helperExe+L"\" --elevated-replace \""+shortNew+L"\" \""+shortTarget+L"\"";
+    SHELLEXECUTEINFOW sei={sizeof(sei)};
+    sei.lpVerb=L"runas";
+    sei.lpFile=helperExe.c_str();
+    sei.lpParameters=cmdLine.c_str();
+    sei.nShow=SW_HIDE;
+    sei.fMask=SEE_MASK_NOCLOSEPROCESS;
+
+    if(!ShellExecuteExW(&sei)) {
+        DWORD err=GetLastError();
+        g_logger<<"[ERROR] 启动提权辅助进程失败，错误码: "<<err<<std::endl;
+        std::filesystem::remove_all(tempDir);
+        return false;
+    }
+    DWORD waitResult=WaitForSingleObject(sei.hProcess,60000);
+    DWORD exitCode=1;
+    if(waitResult==WAIT_OBJECT_0) {
+        GetExitCodeProcess(sei.hProcess,&exitCode);
+    }
+    else {
+        g_logger<<"[ERROR] 提权辅助进程超时或异常"<<std::endl;
+        TerminateProcess(sei.hProcess,1);
+    }
+    CloseHandle(sei.hProcess);
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir,ec);
+
+    return (exitCode==0);
+}
+
+bool SelfUpdater::LaunchNewProcess(const std::wstring& exePath) {
+    STARTUPINFOW si={sizeof(si)};
+    PROCESS_INFORMATION pi;
+    if(!CreateProcessW(exePath.c_str(),NULL,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)) {
+        g_logger<<"[ERROR] 启动新进程失败: "<<GetLastError()<<std::endl;
+        return false;
+    }
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return true;
+}
 
 SelfUpdater::SelfUpdater(HttpClient& httpClient,ConfigManager& configManager)
     : httpClient(httpClient),
@@ -26,7 +141,8 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
 
     try {
         std::filesystem::path tempPath=std::filesystem::temp_directory_path();
-        tempExePath=(tempPath/"mc_updater_new.exe").string();
+        DWORD pid=GetCurrentProcessId();
+        tempExePath=(tempPath/("mc_updater_new_"+std::to_string(pid)+".exe")).string();
 
         g_logger<<"[INFO] 开始下载新启动器: "<<downloadUrl
             <<" (版本: "<<expectedVersion<<")"<<std::endl;
@@ -77,7 +193,7 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
             g_logger<<"[DEBUG] 使用算法: "<<hashAlgorithm
                 <<", 期望哈希: "<<expectedHashValue<<std::endl;
 
-            std::string actualHash=FileHasher::CalculateFileHash(tempExePath,hashAlgorithm);
+            std::string actualHash=FileHasher::CalculateFileHashStream(tempExePath,hashAlgorithm);
 
             if(actualHash.empty()) {
                 g_logger<<"[ERROR] 无法计算文件的哈希值"<<std::endl;
@@ -115,158 +231,33 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
 }
 
 bool SelfUpdater::ApplyUpdate() {
-    try {
-        if(!std::filesystem::exists(tempExePath)) {
-            g_logger<<"[ERROR] 临时启动器文件不存在"<<std::endl;
-            return false;
-        }
+    if(!std::filesystem::exists(tempExePath)) {
+        g_logger<<"[ERROR] 临时文件不存在: "<<tempExePath<<std::endl;
+        return false;
+    }
 
-        g_logger<<"[INFO] 准备应用启动器更新..."<<std::endl;
+    std::wstring curExe=GetCurrentExePathW();
+    std::wstring newExe=FileSystemHelper::Utf8ToWide(tempExePath);
 
-        char buffer[MAX_PATH];
-        std::string currentWorkingDir;
-        if(GetCurrentDirectoryA(MAX_PATH,buffer)!=0) {
-            currentWorkingDir=buffer;
-            g_logger<<"[DEBUG] 当前工作目录: "<<currentWorkingDir<<std::endl;
-        }
-        else {
-            currentWorkingDir=std::filesystem::path(currentExePath).parent_path().string();
-            g_logger<<"[DEBUG] 使用可执行文件目录作为工作目录: "<<currentWorkingDir<<std::endl;
-        }
-
-        std::string batchPath=(std::filesystem::temp_directory_path()/"mc_update.bat").string();
-        std::ofstream batchFile(batchPath);
-
-        if(!batchFile) {
-            g_logger<<"[ERROR] 无法创建更新脚本"<<std::endl;
-            return false;
-        }
-
-        std::filesystem::path configPath=std::filesystem::path(currentWorkingDir)/"config/updater.json";
-
-        batchFile<<"@echo off\n";
-        batchFile<<"setlocal enabledelayedexpansion\n";
-        batchFile<<"title McUpdater Updater\n";
-        batchFile<<"echo ============================================\n";
-        batchFile<<"echo       McUpdater 自更新\n";
-        batchFile<<"echo ============================================\n";
-        batchFile<<"\n";
-        batchFile<<"set OLD_FILE=\""<<currentExePath<<"\"\n";
-        batchFile<<"set NEW_FILE=\""<<tempExePath<<"\"\n";
-        batchFile<<"set WORKING_DIR=\""<<currentWorkingDir<<"\"\n";
-        batchFile<<"set CONFIG_FILE=\""<<configPath.string()<<"\"\n";
-        batchFile<<"set LOG_FILE=\"%TEMP%\\mc_updater_update.log\"\n";
-        batchFile<<"\n";
-        batchFile<<"echo 原工作目录: !WORKING_DIR! > !LOG_FILE!\n";
-        batchFile<<"echo 原程序路径: !OLD_FILE! >> !LOG_FILE!\n";
-        batchFile<<"echo 新程序路径: !NEW_FILE! >> !LOG_FILE!\n";
-        batchFile<<"echo 配置文件: !CONFIG_FILE! >> !LOG_FILE!\n";
-        batchFile<<"\n";
-        batchFile<<"echo 步骤 1/3: 等待原程序关闭...\n";
-        batchFile<<"echo 等待原程序关闭... >> !LOG_FILE!\n";
-        batchFile<<"timeout /t 3 /nobreak > nul\n";
-        batchFile<<"\n";
-        batchFile<<"echo 步骤 2/3: 替换文件...\n";
-        batchFile<<"echo 尝试替换文件... >> !LOG_FILE!\n";
-        batchFile<<"\n";
-        batchFile<<":: 尝试多次删除原文件\n";
-        batchFile<<"set retry_count=0\n";
-        batchFile<<":delete_retry\n";
-        batchFile<<"del \"!OLD_FILE!\" 2>nul\n";
-        batchFile<<"if exist \"!OLD_FILE!\" (\n";
-        batchFile<<"    echo 文件仍被占用，等待2秒后重试... >> !LOG_FILE!\n";
-        batchFile<<"    echo 尝试结束相关进程... >> !LOG_FILE!\n";
-        batchFile<<"    taskkill /f /im \"McUpdaterClient.exe\" >nul 2>&1\n";
-        batchFile<<"    timeout /t 2 /nobreak > nul\n";
-        batchFile<<"    set /a retry_count+=1\n";
-        batchFile<<"    if !retry_count! leq 5 (\n";
-        batchFile<<"        goto delete_retry\n";
-        batchFile<<"    ) else (\n";
-        batchFile<<"        echo 错误: 无法删除原文件，更新失败！ >> !LOG_FILE!\n";
-        batchFile<<"        echo [错误] 无法删除原文件，更新失败！\n";
-        batchFile<<"        pause\n";
-        batchFile<<"        exit /b 1\n";
-        batchFile<<"    )\n";
-        batchFile<<")\n";
-        batchFile<<"\n";
-        batchFile<<"echo 原文件已删除，开始复制新文件... >> !LOG_FILE!\n";
-        batchFile<<"copy \"!NEW_FILE!\" \"!OLD_FILE!\" >nul\n";
-        batchFile<<"if errorlevel 1 (\n";
-        batchFile<<"    echo [错误] 无法复制新文件！ >> !LOG_FILE!\n";
-        batchFile<<"    echo [错误] 无法复制新文件！\n";
-        batchFile<<"    pause\n";
-        batchFile<<"    exit /b 1\n";
-        batchFile<<")\n";
-        batchFile<<"echo 文件替换成功！ >> !LOG_FILE!\n";
-        batchFile<<"echo 文件替换成功！\n";
-        batchFile<<"\n";
-        batchFile<<"echo 步骤 3/3: 启动新版本...\n";
-        batchFile<<"echo 启动新版本... >> !LOG_FILE!\n";
-        batchFile<<"cd /d \"!WORKING_DIR!\"\n";
-        batchFile<<"timeout /t 2 /nobreak > nul\n";
-        batchFile<<"start \"\" /D \"!WORKING_DIR!\" \"!OLD_FILE!\"\n";
-        batchFile<<"if errorlevel 1 (\n";
-        batchFile<<"    echo 启动新程序失败，尝试直接执行... >> !LOG_FILE!\n";
-        batchFile<<"    \"!OLD_FILE!\"\n";
-        batchFile<<")\n";
-        batchFile<<"\n";
-        batchFile<<"echo 清理临时文件...\n";
-        batchFile<<"echo 清理临时文件... >> !LOG_FILE!\n";
-        batchFile<<"del \"!NEW_FILE!\" 2>nul\n";
-        batchFile<<"del \"%~f0\" 2>nul\n";
-        batchFile<<"\n";
-        batchFile<<"echo 更新完成！新程序已启动。\n";
-        batchFile<<"echo 更新完成！新程序已启动。 >> !LOG_FILE!\n";
-        batchFile<<"timeout /t 3 /nobreak > nul\n";
-        batchFile<<"exit\n";
-
-        batchFile.close();
-
-        g_logger<<"[DEBUG] 更新脚本已创建: "<<batchPath<<std::endl;
-
-        SHELLEXECUTEINFO sei={sizeof(sei)};
-        sei.lpVerb="runas";
-        sei.lpFile=batchPath.c_str();
-        sei.nShow=SW_HIDE;
-        sei.fMask=SEE_MASK_NOCLOSEPROCESS;
-
-        if(ShellExecuteEx(&sei)) {
-            g_logger<<"[INFO] 已启动更新脚本（管理员权限）"<<std::endl;
-
-            WaitForSingleObject(sei.hProcess,5000);
-            CloseHandle(sei.hProcess);
-
-            g_logger<<"[INFO] 主程序即将退出，等待更新脚本执行..."<<std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+    CleanupOldBackup(curExe);
+    if(TryNormalReplace(newExe,curExe)) {
+        if(LaunchNewProcess(curExe)) {
             return true;
         }
         else {
-            DWORD err=GetLastError();
-            g_logger<<"[ERROR] 无法以管理员权限执行更新脚本，错误码: "<<err<<std::endl;
-
-            sei.lpVerb=NULL;
-            sei.nShow=SW_HIDE;
-
-            if(ShellExecuteEx(&sei)) {
-                g_logger<<"[INFO] 已启动更新脚本（普通权限）"<<std::endl;
-
-                WaitForSingleObject(sei.hProcess,5000);
-                CloseHandle(sei.hProcess);
-
-                g_logger<<"[INFO] 主程序即将退出..."<<std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(2));
-                return true;
-            }
-            else {
-                g_logger<<"[ERROR] 无法执行更新脚本"<<std::endl;
-                return false;
-            }
+            g_logger<<"[ERROR] 新进程启动失败，尝试回滚..."<<std::endl;
+            return false;
         }
     }
-    catch(const std::exception& e) {
-        g_logger<<"[ERROR] 应用更新失败: "<<e.what()<<std::endl;
-        return false;
+
+    g_logger<<"[INFO] 普通权限不足，尝试提权替换..."<<std::endl;
+    if(RunElevatedReplace(newExe,curExe)) {
+        g_logger<<"[INFO] 提权替换成功，即将退出当前进程"<<std::endl;
+        return true;
     }
+
+    g_logger<<"[ERROR] 所有替换方式均失败"<<std::endl;
+    return false;
 }
 
 std::string SelfUpdater::GetCurrentExePath() {

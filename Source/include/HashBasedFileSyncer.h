@@ -31,6 +31,6 @@ private:
     ProgressReporter& progressReporter;
     FileSystemHelper& fsHelper;
     ZipExtractor& zipExtractor;
-    ConfigManager configManager;
+    ConfigManager& configManager;
 };
 #endif
