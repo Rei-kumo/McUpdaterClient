@@ -17,8 +17,6 @@ private:
         const std::string& extractPath);
     bool ExtractZipSimple(const std::string& zipFilePath,
         const std::string& extractPath);
-    bool ExtractZipWithSystemCommand(const std::string& zipFilePath,
-        const std::string& extractPath);
     bool ExtractZipOriginal(const std::string& zipFilePath,
         const std::string& extractPath);
     bool CheckServerResponse(const std::string& url);

@@ -332,8 +332,17 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
 
         // 根据类型执行操作
         if(type=="A"||type=="M") {
-            std::string sourceFile=tempDir+"/"+path;
-            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;
+            std::string sourceFile;
+            std::string targetFile;
+            try {
+                sourceFile=FileSystemHelper::SecureCombine(tempDir,path); 
+                targetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                failCount++;
+                continue;
+            }
 
             fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
 
@@ -359,7 +368,15 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         }
         else if(type=="D") {
             // 删除文件
-            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;
+            std::string targetFile;
+            try {
+                targetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                failCount++;
+                continue;
+            }
             if(std::filesystem::exists(targetFile)) {
                 try {
                     std::filesystem::remove(targetFile);
@@ -385,13 +402,20 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 failCount++;
                 continue;
             }
-            std::string sourceFile=tempDir+"/"+path;          // 新文件在临时目录中
-            std::string targetFile=updateOrchestrator.GetGameDirectory()+"/"+path;    // 新位置
-            std::string oldTargetFile=updateOrchestrator.GetGameDirectory()+"/"+oldPath; // 旧文件
+            std::string sourceFile,targetFile,oldTargetFile;
+            try {
+                sourceFile=FileSystemHelper::SecureCombine(tempDir,path);
+                targetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+                oldTargetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),oldPath);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                failCount++;
+                continue;
+            }
 
             fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
 
-            // 先复制新文件到目标位置
             if(std::filesystem::exists(sourceFile)) {
                 try {
                     std::filesystem::copy_file(sourceFile,targetFile,
@@ -425,8 +449,15 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
             successCount++;
         }
         else if(type=="AD") {
-            // 新增空目录
-            std::string targetDir=updateOrchestrator.GetGameDirectory()+"/"+path;
+            std::string targetDir;
+            try {
+                targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                failCount++;
+                continue;
+            }
             try {
                 if(!std::filesystem::exists(targetDir)) {
                     std::filesystem::create_directories(targetDir);
@@ -445,7 +476,15 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         }
         else if(type=="DD") {
             // 删除空目录
-            std::string targetDir=updateOrchestrator.GetGameDirectory()+"/"+path;
+            std::string targetDir;
+            try {
+                targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                failCount++;
+                continue;
+            }
             if(std::filesystem::exists(targetDir)&&std::filesystem::is_directory(targetDir)) {
                 try {
                     // 仅删除空目录（如果目录非空，可能因为文件残留而失败）
@@ -502,7 +541,16 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
         for(const auto& entry:std::filesystem::recursive_directory_iterator(wideSourceDir)) {
             if(entry.is_regular_file()) {
                 std::wstring wideRelativePath=entry.path().wstring().substr(wideSourceDir.size()+1);
-                std::wstring wideTargetPath=wideGameDir+L"\\"+wideRelativePath;
+                std::wstring wideTargetPath;
+                try {
+                    wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] 路径遍历被阻止: "
+                        <<FileSystemHelper::WideToUtf8(wideRelativePath)<<" - "<<e.what()<<std::endl;
+                    failedCount++;
+                    continue;
+                }
 
                 std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
                 if(!targetDir.empty()) {
@@ -558,7 +606,16 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
         for(const auto& entry:std::filesystem::recursive_directory_iterator(wideTempDir)) {
             if(entry.is_regular_file()) {
                 std::wstring wideRelativePath=entry.path().wstring().substr(wideTempDir.size()+1);
-                std::wstring wideTargetPath=wideGameDir+L"\\"+wideRelativePath;
+                std::wstring wideTargetPath;
+                try {
+                    wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] 路径遍历被阻止: "
+                        <<FileSystemHelper::WideToUtf8(wideRelativePath)<<" - "<<e.what()<<std::endl;
+                    failedCount++;
+                    continue;
+                }
                 std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
                 if(!targetDir.empty()) {
                     std::filesystem::create_directories(targetDir);

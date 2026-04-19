@@ -67,7 +67,16 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
         std::string relativePath=fileInfo["path"].asString();
         std::string expectedHash=fileInfo["hash"].asString();
-        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+relativePath;
+        std::string fullPath;
+        try {
+            fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] Path traversal blocked in file consistency check: "<<e.what()<<std::endl;
+            allFilesConsistent=false;
+            mismatchedFiles++;
+            continue;
+        }
 
         totalChecked++;
         processedInBatch++;
@@ -94,7 +103,16 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
     for(const auto& dirInfo:directoryManifest) {
         std::string relativePath=dirInfo["path"].asString();
-        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+relativePath;
+        std::string fullPath;
+        try {
+            fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] Path traversal blocked in directory existence check: "<<e.what()<<std::endl;
+            allFilesConsistent=false;
+            missingFiles++;
+            continue;
+        }
 
         if(!std::filesystem::exists(fullPath)) {
             g_logger<<"[DEBUG] 目录不存在: "<<relativePath<<std::endl;
@@ -109,7 +127,16 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
             std::string fileRelativePath=contentInfo["path"].asString();
             std::string expectedHash=contentInfo["hash"].asString();
-            std::string fileFullPath=fullPath+"/"+fileRelativePath;
+            std::string fileFullPath;
+            try {
+                fileFullPath=FileSystemHelper::SecureCombine(fullPath,fileRelativePath);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] Path traversal blocked in directory content check: "<<e.what()<<std::endl;
+                allFilesConsistent=false;
+                mismatchedFiles++;
+                continue;
+            }
 
             totalChecked++;
             processedInBatch++;
@@ -218,10 +245,17 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         std::cout<<std::endl;
         std::cout.flush();
 
-        std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory());
-        std::filesystem::path fullPath=gameDirPath/relativePath;
-        std::string fullPathStr=fullPath.string();
-
+        std::string fullPathStr;
+        try {
+            fullPathStr=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] Path traversal blocked in UpdateFilesByHash: "<<e.what()<<std::endl;
+            std::cout<<"[ERROR] 路径非法 "<<relativePath<<std::endl;
+            allSuccess=false;
+            continue;
+        }
+        std::filesystem::path fullPath=std::filesystem::path(fullPathStr);
         std::filesystem::path parentDir=fullPath.parent_path();
         fsHelper.EnsureDirectoryExists(parentDir.string());
 
@@ -243,7 +277,6 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
 
         if(!canWrite) {
             g_logger<<"[ERROR] 错误: 目录没有写入权限: "<<parentDir.string()<<std::endl;
-            std::cout<<"  [权限错误]"<<std::endl;
             allSuccess=false;
             continue;
         }
@@ -252,7 +285,6 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
             std::string actualHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(!actualHash.empty()&&actualHash==expectedHash) {
                 g_logger<<"[INFO] 文件已是最新: "<<relativePath<<std::endl;
-                std::cout<<"  [已是最新]"<<std::endl;
                 continue;
             }
         }
@@ -301,7 +333,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         httpClient.SetDownloadTimeout(0);
 
         if(!downloadSuccess) {
-            std::cout<<"  [失败]"<<std::endl;
+            g_logger<<"[ERROR} 下载失败！"<<std::endl;
             allSuccess=false;
             continue;
         }
@@ -313,7 +345,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         if(!expectedHash.empty()) {
             std::string downloadedHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(downloadedHash!=expectedHash) {
-                std::cout<<"[ERROR]哈希不匹配，删除文件"<<std::endl;
+                g_logger<<"[ERROR]哈希不匹配，删除文件"<<std::endl;
                 g_logger<<"[ERROR] 文件哈希不匹配: "<<relativePath
                     <<" 期望 "<<expectedHash<<" 实际 "<<downloadedHash<<std::endl;
                 std::error_code removeEc;
@@ -359,8 +391,14 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         return false;
     }
 
-    std::filesystem::path gameDirPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory());
-    std::string targetDir=(gameDirPath/relativePath).string();
+    std::string targetDir;
+    try {
+        targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 路径遍历被阻止: "<<relativePath<<" - "<<e.what()<<std::endl;
+        return false;
+    }
     fsHelper.EnsureDirectoryExists(targetDir);
 
     const Json::Value& contents=dirInfo["contents"];
@@ -370,9 +408,17 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         std::string fileRelativePath=contentInfo["path"].asString();
         std::string expectedHash=contentInfo["hash"].asString();
 
-        std::string tempFilePath=tempDir+"/"+fileRelativePath;
-        std::string targetFilePath=targetDir+"/"+fileRelativePath;
-
+        std::string tempFilePath;
+        std::string targetFilePath;
+        try {
+            tempFilePath=FileSystemHelper::SecureCombine(tempDir,fileRelativePath);
+            targetFilePath=FileSystemHelper::SecureCombine(targetDir,fileRelativePath);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] 临时文件路径遍历被阻止: "<<e.what()<<std::endl;
+            dirSuccess=false;
+            continue;
+        }
         if(!std::filesystem::exists(tempFilePath)) {
             g_logger<<"[WARN] 解压文件中不存在: "<<fileRelativePath<<std::endl;
             dirSuccess=false;
@@ -405,7 +451,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
     }
 
     if(configManager.ReadEnableFileDeletion()) {
-        fsHelper.CleanupOrphanedFiles(targetDir,contents);
+        fsHelper.CleanupOrphanedFiles(updateOrchestrator.GetGameDirectory(),relativePath,contents);
     }
 
     try {
@@ -424,7 +470,14 @@ bool HashBasedFileSyncer::ProcessDeleteList(const Json::Value& deleteList) {
 
     for(const auto& item:deleteList) {
         std::string path=item.asString();
-        std::string fullPath=updateOrchestrator.GetGameDirectory()+"/"+path;
+        std::string fullPath;
+        try {
+            fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
+        }
+        catch(const std::exception& e) {
+            g_logger<<"[ERROR] 删除路径遍历攻击被阻止: "<<e.what()<<std::endl;
+            continue;
+        }
 
         try {
             if(std::filesystem::exists(fullPath)) {

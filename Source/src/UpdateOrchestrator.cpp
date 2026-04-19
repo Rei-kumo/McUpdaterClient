@@ -422,6 +422,17 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 g_logger<<"[DEBUG] 期望大小: "<<progressReporter.FormatBytes(fileInfo["size"].asInt64())<<std::endl;
             }
 
+            std::string safeFullPath;
+            try {
+                safeFullPath=FileSystemHelper::SecureCombine(gameDirectory,path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<" (目录: "<<path<<")"<<std::endl;
+                if(forceSync) return false;
+                allSuccess=false;
+                continue;
+            }
+
             if(!zipExtractor.DownloadAndExtract(url,path,gameDirectory)) {
                 g_logger<<"[ERROR] 错误: 目录更新失败: "<<path<<std::endl;
 
@@ -431,12 +442,12 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 }
 
                 allSuccess=false;
-                std::string fullPath=gameDirectory+"/"+path;
-                g_logger<<"[WARN] 尝试创建空目录作为后备: "<<fullPath<<std::endl;
+
+                g_logger<<"[WARN] 尝试创建空目录作为后备: "<<safeFullPath<<std::endl;
 
                 try {
-                    std::filesystem::create_directories(fullPath);
-                    g_logger<<"[INFO] 已创建空目录: "<<fullPath<<std::endl;
+                    std::filesystem::create_directories(safeFullPath);
+                    g_logger<<"[INFO] 已创建空目录: "<<safeFullPath<<std::endl;
                 }
                 catch(const std::exception& e) {
                     g_logger<<"[ERROR] 创建空目录失败: "<<e.what()<<std::endl;
@@ -447,7 +458,16 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
             }
         }
         else {
-            std::string fullPath=gameDirectory+"/"+path;
+            std::string fullPath;
+            try {
+                fullPath=FileSystemHelper::SecureCombine(gameDirectory,path);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                if(forceSync) return false;
+                allSuccess=false;
+                continue;
+            }
             std::string outputDir=std::filesystem::path(fullPath).parent_path().string();
             fsHelper.EnsureDirectoryExists(outputDir);
 

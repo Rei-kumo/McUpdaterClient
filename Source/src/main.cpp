@@ -7,6 +7,26 @@ int main(int argc,char* argv[]) {
         std::wstring newExe=FileSystemHelper::Utf8ToWide(argv[2]);
         std::wstring targetExe=FileSystemHelper::Utf8ToWide(argv[3]);
 
+        wchar_t curExe[MAX_PATH];
+        GetModuleFileNameW(NULL,curExe,MAX_PATH);
+
+        if(_wcsicmp(targetExe.c_str(),curExe)!=0) {
+            g_logger<<"[ERROR] 提权替换目标不是当前程序，拒绝"<<std::endl;
+            return 1;
+        }
+
+        wchar_t tempPath[MAX_PATH];
+
+        GetTempPathW(MAX_PATH,tempPath);
+        std::filesystem::path tempDirPath(tempPath);
+        std::filesystem::path newExePath(newExe);
+        tempDirPath=std::filesystem::weakly_canonical(tempDirPath);
+        newExePath=std::filesystem::weakly_canonical(newExePath);
+        if(newExePath.wstring().find(tempDirPath.wstring())!=0) {
+            g_logger<<"[ERROR] 新文件不在临时目录（规范化后），拒绝"<<std::endl;
+            return 1;
+        }
+
         for(int i=0; i<30; ++i) {
             HANDLE h=CreateFileW(targetExe.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
             if(h!=INVALID_HANDLE_VALUE) {

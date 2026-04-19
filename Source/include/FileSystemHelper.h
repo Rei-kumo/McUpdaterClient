@@ -5,7 +5,8 @@ class FileSystemHelper {
 public:
     void EnsureDirectoryExists(const std::string& path);
     bool BackupFile(const std::string& filePath);           
-    void CleanupOrphanedFiles(const std::string& directoryPath,
+    void CleanupOrphanedFiles(const std::string& baseDir,
+        const std::string& relativeDir,
         const Json::Value& expectedContents);
     bool CopyFileWithUnicode(const std::wstring& sourcePath,
         const std::wstring& targetPath);
@@ -17,5 +18,8 @@ public:
     void CleanupTempFiles(const std::string& zipFilePath,
         const std::string& extractPath);
     bool ValidateExtraction(const std::string& extractPath);
+    static std::string SecureCombine(const std::string& baseDir,const std::string& userPath);
+    static std::wstring SecureCombineW(const std::wstring& baseDir,const std::wstring& userPath);
+
 };
 #endif

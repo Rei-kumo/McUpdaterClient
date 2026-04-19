@@ -84,21 +84,6 @@ bool ZipExtractor::ExtractZipWithMiniz(const std::string& zipFilePath,const std:
 bool ZipExtractor::ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath) {
     g_logger<<"[INFO] 使用简单解压方法..."<<std::endl;
 
-    g_logger<<"[INFO] 尝试使用 Windows 系统命令解压..."<<std::endl;
-    if(ExtractZipWithSystemCommand(zipFilePath,extractPath)) {
-        g_logger<<"[INFO] Windows 系统命令解压成功"<<std::endl;
-        if(fsHelper.ValidateExtraction(extractPath)) {
-            return true;
-        }
-        else {
-            g_logger<<"[WARN] Windows 系统命令解压验证失败，尝试备用方案"<<std::endl;
-            fsHelper.CleanupTempExtractDir(extractPath);
-        }
-    }
-    else {
-        g_logger<<"[WARN] Windows 系统命令解压失败，尝试备用方案"<<std::endl;
-    }
-
     g_logger<<"[INFO] 尝试使用原始 libzip 解压..."<<std::endl;
     if(ExtractZipOriginal(zipFilePath,extractPath)) {
         g_logger<<"[INFO] libzip 解压成功"<<std::endl;
@@ -114,64 +99,6 @@ bool ZipExtractor::ExtractZipSimple(const std::string& zipFilePath,const std::st
     else {
         g_logger<<"[ERROR] libzip 解压失败"<<std::endl;
         fsHelper.CleanupTempExtractDir(extractPath);
-        return false;
-    }
-}
-
-bool ZipExtractor::ExtractZipWithSystemCommand(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 使用 Windows 系统命令解压..."<<std::endl;
-    if(!std::filesystem::exists(zipFilePath)) {
-        g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
-        return false;
-    }
-    fsHelper.EnsureDirectoryExists(extractPath);
-
-    std::string command;
-    command="powershell -Command \"Expand-Archive -Path '"+zipFilePath+
-        "' -DestinationPath '"+extractPath+"' -Force -ErrorAction Stop\"";
-
-    g_logger<<"[DEBUG] 执行命令: "<<command<<std::endl;
-
-    STARTUPINFOA si={0};
-    PROCESS_INFORMATION pi={0};
-    si.cb=sizeof(si);
-    si.dwFlags=STARTF_USESHOWWINDOW;
-    si.wShowWindow=SW_HIDE;
-
-    if(CreateProcessA(NULL,(LPSTR)command.c_str(),NULL,NULL,FALSE,
-        CREATE_NO_WINDOW|CREATE_UNICODE_ENVIRONMENT,
-        NULL,NULL,&si,&pi)) {
-        DWORD waitResult=WaitForSingleObject(pi.hProcess,60000);
-
-        DWORD exitCode=1;
-        if(waitResult==WAIT_OBJECT_0) {
-            GetExitCodeProcess(pi.hProcess,&exitCode);
-        }
-        else if(waitResult==WAIT_TIMEOUT) {
-            g_logger<<"[ERROR] 解压命令超时"<<std::endl;
-            TerminateProcess(pi.hProcess,1);
-            exitCode=1;
-        }
-        else {
-            g_logger<<"[ERROR] 等待解压进程失败，等待结果: "<<waitResult<<std::endl;
-            exitCode=1;
-        }
-
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-
-        if(exitCode==0) {
-            g_logger<<"[INFO] Windows 系统命令解压成功"<<std::endl;
-            return true;
-        }
-        else {
-            g_logger<<"[ERROR] Windows 系统命令解压失败，退出代码: "<<exitCode<<std::endl;
-            return false;
-        }
-    }
-    else {
-        DWORD error=GetLastError();
-        g_logger<<"[ERROR] 无法创建解压进程，错误代码: "<<error<<std::endl;
         return false;
     }
 }
@@ -217,11 +144,18 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         std::string fullPath;
         std::wstring wideExtractPath=fsHelper.Utf8ToWide(extractPath);
         if(!wideExtractPath.empty()&&!wideName.empty()) {
-            std::wstring wideFullPath=wideExtractPath+L"/"+wideName;
-            fullPath=fsHelper.WideToUtf8(wideFullPath);
+            std::wstring safeFullPath;
+            try {
+                safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] ZIP目录路径遍历被阻止: "<<e.what()<<" (条目: "<<originalName<<")"<<std::endl;
+                continue;
+            }
+            fullPath=fsHelper.WideToUtf8(safeFullPath);
             if(!wideName.empty()&&wideName.back()==L'/') {
                 try {
-                    std::filesystem::path dirPath=wideFullPath;
+                    std::filesystem::path dirPath=safeFullPath;
                     std::filesystem::create_directories(dirPath);
 
                     if(i%50==0) {
@@ -235,9 +169,15 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             }
         }
         else {
-            fullPath=extractPath+"/"+safeName;
+            try {
+                fullPath=FileSystemHelper::SecureCombine(extractPath,safeName);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] Path traversal blocked: "<<e.what()
+                    <<" (entry: "<<originalName<<")"<<std::endl;
+                continue;
+            }
         }
-        fullPath=extractPath+"/"+safeName;
         if(!safeName.empty()&&safeName.back()=='/') {
             try {
                 std::filesystem::create_directories(fullPath);
@@ -290,11 +230,21 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         std::wstring wideName=fsHelper.Utf8ToWide(originalName);
 
         if(!wideExtractPath.empty()&&!wideName.empty()) {
-            std::wstring wideFullPath=wideExtractPath+L"/"+wideName;
-            fullPath=fsHelper.WideToUtf8(wideFullPath);
-            std::filesystem::path filePath=wideFullPath;
+            std::wstring safeFullPath;
+            try {
+                safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
+            }
+            catch(const std::exception& e) {
+                g_logger<<"[ERROR] ZIP path traversal blocked: "<<e.what()
+                    <<" (entry: "<<originalName<<")"<<std::endl;
+                failedFiles++;
+                unicodeFailedFiles++;
+                continue;
+            }
+            fullPath=fsHelper.WideToUtf8(safeFullPath);
+            std::filesystem::path filePath=safeFullPath;
             std::filesystem::create_directories(filePath.parent_path());
-            FILE* outFile=_wfopen(wideFullPath.c_str(),L"wb");
+            FILE* outFile=_wfopen(safeFullPath.c_str(),L"wb");
             if(outFile) {
                 zip_int64_t bytesRead;
                 long long totalBytes=0;
@@ -312,7 +262,15 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                 failedFiles++;
                 unicodeFailedFiles++;
                 std::string asciiName="file_"+std::to_string(extractedFiles+failedFiles)+".dat";
-                std::string asciiFullPath=extractPath+"/"+asciiName;
+                std::string asciiFullPath;
+                try {
+                    asciiFullPath=FileSystemHelper::SecureCombine(extractPath,asciiName);
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] ASCII后备路径遍历被阻止: "<<e.what()<<std::endl;
+                    failedFiles++;
+                    continue;
+                }
 
                 g_logger<<"[INFO] 尝试使用ASCII名称: "<<asciiName<<std::endl;
 
@@ -508,8 +466,15 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
                 g_logger<<"[INFO] 服务器返回错误页面，可能是空文件夹，将创建空目录"<<std::endl;
                 g_logger<<"[DEBUG] 服务器响应: "<<content<<std::endl;
                 std::filesystem::remove(tempZip);
-                std::filesystem::path gameDirPath=std::filesystem::absolute(targetBaseDir);
-                std::string extractPath=(gameDirPath/relativePath).string();
+                std::string extractPath;
+                try {
+                    extractPath=FileSystemHelper::SecureCombine(targetBaseDir,relativePath);
+                }
+                catch(const std::exception& e) {
+                    g_logger<<"[ERROR] 下载并解压中的路径遍历被阻止: "<<e.what()<<std::endl;
+                    std::filesystem::remove(tempZip);
+                    return false;
+                }
                 try {
                     if(!std::filesystem::exists(extractPath)) {
                         std::filesystem::create_directories(extractPath);
@@ -541,8 +506,14 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
         std::filesystem::remove(tempZip);
         return false;
     }
-    std::filesystem::path gameDirPath=std::filesystem::absolute(targetBaseDir);
-    std::string extractPath=(gameDirPath/relativePath).string();
+    std::string extractPath;
+    try {
+        extractPath=FileSystemHelper::SecureCombine(targetBaseDir,relativePath);
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+        return false;
+    }
     if(std::filesystem::exists(extractPath)) {
         g_logger<<"[INFO] 备份原有目录..."<<std::endl;
         fsHelper.BackupFile(extractPath);

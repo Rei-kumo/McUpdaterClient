@@ -84,11 +84,22 @@ bool FileSystemHelper::BackupFile(const std::string& filePath) {
         return false;
     }
 }
-void FileSystemHelper::CleanupOrphanedFiles(const std::string& directoryPath,const Json::Value& expectedContents) {
+void FileSystemHelper::CleanupOrphanedFiles(const std::string& baseDir,
+    const std::string& relativeDir,
+    const Json::Value& expectedContents) {
     if(!expectedContents.isArray()) {
         g_logger<<"[WARN] 警告: 预期内容不是数组，跳过清理孤儿文件"<<std::endl;
         return;
     }
+    std::string fullDirPath;
+    try {
+        fullDirPath=SecureCombine(baseDir,relativeDir);
+    }
+    catch(const std::exception& e) {
+        g_logger<<"[ERROR] 清理孤儿文件时路径遍历被阻止: "<<relativeDir<<" - "<<e.what()<<std::endl;
+        return;
+    }
+
     std::set<std::string> expectedFiles;
     for(const auto& contentInfo:expectedContents) {
         std::string path=contentInfo["path"].asString();
@@ -100,10 +111,14 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& directoryPath,con
     for(const auto& file:expectedFiles) {
         g_logger<<"[DEBUG]   - "<<file<<std::endl;
     }
+
     std::error_code ec;
-    auto it=std::filesystem::recursive_directory_iterator(directoryPath,ec);
+    auto it=std::filesystem::recursive_directory_iterator(
+        fullDirPath,
+        std::filesystem::directory_options::skip_permission_denied,
+        ec);
     if(ec) {
-        g_logger<<"[ERROR] 无法打开目录迭代器: "<<directoryPath<<" - "<<ec.message()<<std::endl;
+        g_logger<<"[ERROR] 无法打开目录迭代器: "<<fullDirPath<<" - "<<ec.message()<<std::endl;
         return;
     }
 
@@ -115,8 +130,13 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& directoryPath,con
         }
 
         const auto& entry=*it;
+        if(entry.is_symlink()||entry.is_other()) {
+            it.increment(ec);
+            continue;
+        }
+
         if(entry.is_regular_file()) {
-            std::string relativePath=std::filesystem::relative(entry.path(),directoryPath,ec).string();
+            std::string relativePath=std::filesystem::relative(entry.path(),fullDirPath,ec).string();
             if(ec) {
                 g_logger<<"[ERROR] 计算相对路径失败: "<<entry.path().string()<<" - "<<ec.message()<<std::endl;
                 it.increment(ec);
@@ -292,4 +312,112 @@ bool FileSystemHelper::ValidateExtraction(const std::string& extractPath) {
         g_logger<<"[ERROR] 验证解压结果失败: "<<e.what()<<std::endl;
         return false;
     }
+}
+std::string FileSystemHelper::SecureCombine(const std::string& baseDir,const std::string& userPath) {
+    if(baseDir.empty()) {
+        throw std::runtime_error("SecureCombine: base directory is empty");
+    }
+
+    std::error_code ec;
+    std::filesystem::path base=std::filesystem::absolute(baseDir,ec);
+    if(ec) {
+        throw std::runtime_error("SecureCombine: cannot resolve base path: "+baseDir);
+    }
+    base=std::filesystem::weakly_canonical(base,ec);
+    if(ec) {
+        base=std::filesystem::absolute(baseDir,ec);
+        if(ec) {
+            throw std::runtime_error("SecureCombine: base path does not exist and cannot be resolved: "+baseDir);
+        }
+    }
+    std::string cleanUserPath=userPath;
+    std::replace(cleanUserPath.begin(),cleanUserPath.end(),'\\','/');
+    std::filesystem::path full=base/cleanUserPath;
+    full=std::filesystem::weakly_canonical(full,ec);
+    if(ec) {
+        std::filesystem::path parent=full.parent_path();
+        parent=std::filesystem::weakly_canonical(parent,ec);
+        if(ec) {
+            throw std::runtime_error("SecureCombine: cannot resolve path: "+userPath);
+        }
+        full=parent/full.filename();
+    }
+    std::string fullStr=full.string();
+    std::string baseStr=base.string();
+    std::replace(fullStr.begin(),fullStr.end(),'\\','/');
+    std::replace(baseStr.begin(),baseStr.end(),'\\','/');
+    if(baseStr.back()!='/') {
+        baseStr+='/';
+    }
+    if(fullStr.back()!='/') {
+        fullStr+='/';
+    }
+
+    if(fullStr.size()<baseStr.size()||
+        fullStr.compare(0,baseStr.size(),baseStr)!=0) {
+        throw std::runtime_error("Path traversal detected: "+userPath);
+    }
+    if(fullStr.find("/../")!=std::string::npos||
+        fullStr.find("\\..\\")!=std::string::npos) {
+        throw std::runtime_error("Path traversal attempt (..) in resolved path: "+userPath);
+    }
+    std::string result=full.string();
+    if(!result.empty()&&result.back()=='/') result.pop_back();
+    return result;
+}
+
+std::wstring FileSystemHelper::SecureCombineW(const std::wstring& baseDir,const std::wstring& userPath) {
+    if(baseDir.empty()) {
+        throw std::runtime_error("SecureCombineW: base directory is empty");
+    }
+
+    std::error_code ec;
+    std::filesystem::path base(baseDir);
+    base=std::filesystem::absolute(base,ec);
+    if(ec) {
+        throw std::runtime_error("SecureCombineW: cannot resolve base path");
+    }
+    base=std::filesystem::weakly_canonical(base,ec);
+    if(ec) {
+        base=std::filesystem::absolute(baseDir,ec);
+        if(ec) {
+            throw std::runtime_error("SecureCombineW: base path does not exist");
+        }
+    }
+
+    std::wstring cleanUserPath=userPath;
+    std::replace(cleanUserPath.begin(),cleanUserPath.end(),L'\\',L'/');
+
+    std::filesystem::path full=base/cleanUserPath;
+    full=std::filesystem::weakly_canonical(full,ec);
+    if(ec) {
+        std::filesystem::path parent=full.parent_path();
+        parent=std::filesystem::weakly_canonical(parent,ec);
+        if(ec) {
+            throw std::runtime_error("SecureCombineW: cannot resolve path");
+        }
+        full=parent/full.filename();
+    }
+
+    std::wstring fullStr=full.wstring();
+    std::wstring baseStr=base.wstring();
+
+    std::replace(fullStr.begin(),fullStr.end(),L'\\',L'/');
+    std::replace(baseStr.begin(),baseStr.end(),L'\\',L'/');
+
+    if(baseStr.back()!=L'/') baseStr+=L'/';
+    if(fullStr.back()!=L'/') fullStr+=L'/';
+
+    if(fullStr.size()<baseStr.size()||
+        fullStr.compare(0,baseStr.size(),baseStr)!=0) {
+        throw std::runtime_error("Path traversal detected (wide)");
+    }
+
+    if(fullStr.find(L"/../")!=std::wstring::npos) {
+        throw std::runtime_error("Path traversal attempt (..) in resolved wide path");
+    }
+
+    std::wstring result=full.wstring();
+    if(!result.empty()&&result.back()==L'/') result.pop_back();
+    return result;
 }
