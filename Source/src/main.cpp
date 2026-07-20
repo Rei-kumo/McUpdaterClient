@@ -2,7 +2,9 @@
 #include <string>
 #include "ConfigManager.h"
 #include "UpdateOrchestrator.h"
+#include "logger.h"
 int main(int argc,char* argv[]) {
+    SetConsoleOutputCP(CP_UTF8);
     if(argc==4&&strcmp(argv[1],"--elevated-replace")==0) {
         std::wstring newExe=FileSystemHelper::Utf8ToWide(argv[2]);
         std::wstring targetExe=FileSystemHelper::Utf8ToWide(argv[3]);
@@ -11,7 +13,7 @@ int main(int argc,char* argv[]) {
         GetModuleFileNameW(NULL,curExe,MAX_PATH);
 
         if(_wcsicmp(targetExe.c_str(),curExe)!=0) {
-            g_logger<<"[ERROR] 提权替换目标不是当前程序，拒绝"<<std::endl;
+            LOG_ERROR("提权替换目标不是当前程序，拒绝");
             return 1;
         }
 
@@ -23,7 +25,7 @@ int main(int argc,char* argv[]) {
         tempDirPath=std::filesystem::weakly_canonical(tempDirPath);
         newExePath=std::filesystem::weakly_canonical(newExePath);
         if(newExePath.wstring().find(tempDirPath.wstring())!=0) {
-            g_logger<<"[ERROR] 新文件不在临时目录（规范化后），拒绝"<<std::endl;
+			LOG_ERROR("新文件不在临时目录（规范化后），拒绝");
             return 1;
         }
 
@@ -63,71 +65,71 @@ int main(int argc,char* argv[]) {
         configManager.WriteLauncherVersion(currentVersion);
     }
 
-    g_logger<<"[INFO] 当前启动器版本: v"<<currentVersion<<std::endl;
+	LOG_INFO("当前启动器版本: v{}",currentVersion);
 
     if(!configManager.ConfigExists()) {
-        std::cout<<"[INFO] 未找到配置文件，正在生成默认配置文件..."<<std::endl;
+		LOG_INFO("未找到配置文件，正在生成默认配置文件...");
 
         if(!configManager.InitializeDefaultConfig()) {
-            std::cerr<<"[ERROR] 生成默认配置文件失败!"<<std::endl;
+			LOG_ERROR("生成默认配置文件失败!");
             return 1;
         }
 
-        std::cout<<"[INFO] 默认配置文件已生成，请编辑 "<<cfg<<" 文件来配置更新服务器地址和游戏目录！"<<std::endl;
-        std::cout<<"[INFO] 按回车键退出..."<<std::endl;
+		LOG_INFO("默认配置文件已生成，请编辑 {} 文件来配置更新服务器地址和游戏目录！",cfg);
+		LOG_INFO("按回车键退出...");
+
         std::cin.get();
         return 0;
     }
 
     std::string logFile=configManager.ReadLogFile();
-    if(!g_logger.Initialize(logFile)) {
-        std::cerr<<"[ERROR] 无法初始化日志文件，将继续使用控制台输出"<<std::endl;
+    if(!Logger::Instance().Initialize(logFile)) {
+        LOG_ERROR("无法初始化日志文件，将继续使用控制台输出");
     }
     else {
-        std::cout<<"[INFO] 日志文件: "<<logFile<<std::endl;
+        LOG_INFO("日志文件: {}",logFile);
     }
 
     std::string apiUrl=configManager.ReadUpdateUrl();
     std::string gameDir=configManager.ReadGameDirectory();
 
     if(apiUrl.empty()) {
-        g_logger<<"[ERROR] 配置文件中未设置更新api(update_url)！"<<std::endl;
+        LOG_ERROR("配置文件中未设置更新api(update_url)！");
         return 1;
     }
 
     if(gameDir.empty()) {
-        g_logger<<"[ERROR] 配置文件中未设置游戏目录(game_directory)！"<<std::endl;
+        LOG_ERROR("配置文件中未设置游戏目录(game_directory)！");
         return 1;
     }
 
-    g_logger<<"[INFO] Made by Reikumo."<<std::endl;
-    g_logger<<"[INFO] 配置加载成功："<<std::endl;
-    g_logger<<"[INFO]  游戏目录: "<<gameDir<<std::endl;
-    g_logger<<"[INFO]  更新服务器api: "<<apiUrl<<std::endl;
-    g_logger<<"[INFO]  自动更新状态: "<<(configManager.ReadAutoUpdate()?"开启":"关闭")<<std::endl;
-    g_logger<<"[INFO]  日志文件地址: "<<logFile<<std::endl;
-    g_logger<<"[INFO]  客户端更新模式: "<<configManager.ReadUpdateMode()<<" (可能被服务端覆盖)"<<std::endl;
-    g_logger<<"[INFO]  哈希算法: "<<configManager.ReadHashAlgorithm()<<std::endl;
-    g_logger<<"[INFO]  文件删除功能: "<<(configManager.ReadEnableFileDeletion()?"开启":"关闭")<<std::endl;
-    g_logger<<"[INFO]  API超时时间: "<<configManager.ReadApiTimeout()<<"秒"<<std::endl;
-    g_logger<<std::endl;
+    LOG_INFO("Made by Reikumo.");
+    LOG_INFO("配置加载成功：");
+    LOG_INFO("  游戏目录: {}", gameDir);
+    LOG_INFO("  更新服务器api: {}", apiUrl);
+    LOG_INFO("  自动更新状态: {}", (configManager.ReadAutoUpdate() ? "开启" : "关闭"));
+    LOG_INFO("  日志文件地址: {}", logFile);
+    LOG_INFO("  客户端更新模式: {} (可能被服务端覆盖)", configManager.ReadUpdateMode());
+    LOG_INFO("  哈希算法: {}", configManager.ReadHashAlgorithm());
+    LOG_INFO("  文件删除功能: {}", (configManager.ReadEnableFileDeletion() ? "开启" : "关闭"));
+    LOG_INFO("  API超时时间: {}秒", configManager.ReadApiTimeout());
 
     {
         UpdateOrchestrator updater(cfg,apiUrl,gameDir);
 
         if(updater.CheckForUpdates()) {
             if(configManager.ReadAutoUpdate()) {
-                g_logger<<"[INFO] 自动更新已开启，开始更新..."<<std::endl;
+                LOG_INFO("自动更新已开启，开始更新...");
                 if(updater.ForceUpdate(false)) {
-                    g_logger<<"[INFO] 自动更新成功！"<<std::endl;
+                    LOG_INFO("自动更新成功！");
                 }
                 else {
-                    g_logger<<"[ERROR] 自动更新失败"<<std::endl;
+                    LOG_ERROR("自动更新失败");
                     return 1;
                 }
             }
             else {
-                std::cout<<"[INFO] 是否立即更新？ (y/n): ";
+				LOG_INFO("是否立即更新？ (y/n): ");
                 char choice;
                 std::cin>>choice;
 
@@ -137,24 +139,24 @@ int main(int argc,char* argv[]) {
                     bool forceSync=(choice=='y'||choice=='Y');
 
                     if(updater.ForceUpdate(forceSync)) {
-                        g_logger<<"[INFO] 更新成功！"<<std::endl;
+                        LOG_INFO("更新成功！");
                     }
                     else {
-                        g_logger<<"[ERROR] 更新失败！"<<std::endl;
+                        LOG_ERROR("更新失败！");
                         return 1;
                     }
                 }
                 else {
-                    g_logger<<"[INFO] 已取消更新。"<<std::endl;
+                    LOG_INFO("已取消更新。");
                 }
             }
         }
     }
 
-    g_logger<<"[INFO] === McUpdaterClient 日志结束 ==="<<std::endl;
+    LOG_INFO("=== McUpdaterClient 日志结束 ===");
 
     if(!configManager.ReadAutoUpdate()) {
-        std::cout<<"按回车键退出..."<<std::endl;
+        LOG_INFO("按回车键退出...");
         std::cin.ignore();
         std::cin.get();
     }

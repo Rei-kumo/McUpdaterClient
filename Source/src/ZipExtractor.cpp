@@ -29,11 +29,11 @@ bool ZipExtractor::ExtractZip(const std::vector<unsigned char>& zipData,const st
     std::string tempDir=std::filesystem::temp_directory_path().string();
     std::string tempZip=tempDir+"/minecraft_update_"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".zip";
 
-    g_logger<<"[INFO] 将ZIP数据写入临时文件: "<<tempZip<<std::endl;
+	LOG_INFO("将ZIP数据写入临时文件: {}",tempZip);
 
     std::ofstream tempFile(tempZip,std::ios::binary);
     if(!tempFile) {
-        g_logger<<"[ERROR] 无法创建临时ZIP文件: "<<tempZip<<std::endl;
+        LOG_ERROR("无法创建临时ZIP文件: {}", tempZip);
         return false;
     }
 
@@ -43,84 +43,84 @@ bool ZipExtractor::ExtractZip(const std::vector<unsigned char>& zipData,const st
     std::error_code ec;
     std::filesystem::remove(tempZip,ec);
     if(ec) {
-        g_logger<<"[WARN] 无法删除临时文件: "<<tempZip<<" - "<<ec.message()<<std::endl;
+        LOG_WARN("无法删除临时文件: {} - {}", tempZip, ec.message());
     }
 
     return result;
 }
 bool ZipExtractor::ExtractZipFromFile(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 开始解压文件: "<<zipFilePath<<" 到 "<<extractPath<<std::endl;
+    LOG_INFO("开始解压文件: {} 到 {}", zipFilePath, extractPath);
 
     std::error_code ec;
     if(!std::filesystem::exists(zipFilePath,ec)) {
         if(ec) {
-            g_logger<<"[ERROR] 检查ZIP文件存在性失败: "<<ec.message()<<std::endl;
+            LOG_ERROR("检查ZIP文件存在性失败: {}", ec.message());
         }
         else {
-            g_logger<<"[ERROR] ZIP 文件不存在: "<<zipFilePath<<std::endl;
+            LOG_ERROR("ZIP 文件不存在: {}", zipFilePath);
         }
         return false;
     }
 
     auto fileSize=std::filesystem::file_size(zipFilePath,ec);
     if(ec) {
-        g_logger<<"[ERROR] 无法获取ZIP文件大小: "<<ec.message()<<std::endl;
+        LOG_ERROR("无法获取ZIP文件大小: {}", ec.message());
         return false;
     }
     if(fileSize==0) {
-        g_logger<<"[ERROR] ZIP 文件为空: "<<zipFilePath<<std::endl;
+        LOG_ERROR("ZIP 文件为空: {}", zipFilePath);
         return false;
     }
 
-    g_logger<<"[INFO] ZIP 文件大小: "<<pRepoter.FormatBytes(fileSize)<<std::endl;
+    LOG_INFO("ZIP 文件大小: {}", pRepoter.FormatBytes(fileSize));
 
     return ExtractZipWithMiniz(zipFilePath,extractPath);
 }
 bool ZipExtractor::ExtractZipWithMiniz(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 调用 miniz 解压方法..."<<std::endl;
+    LOG_INFO("调用 miniz 解压方法...");
     return ExtractZipSimple(zipFilePath,extractPath);
 }
 
 bool ZipExtractor::ExtractZipSimple(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 使用简单解压方法..."<<std::endl;
+    LOG_INFO("使用简单解压方法...");
 
-    g_logger<<"[INFO] 尝试使用原始 libzip 解压..."<<std::endl;
+    LOG_INFO("尝试使用原始 libzip 解压...");
     if(ExtractZipOriginal(zipFilePath,extractPath)) {
-        g_logger<<"[INFO] libzip 解压成功"<<std::endl;
+        LOG_INFO("libzip 解压成功");
         if(fsHelper.ValidateExtraction(extractPath)) {
             return true;
         }
         else {
-            g_logger<<"[WARN] libzip 解压验证失败"<<std::endl;
+            LOG_WARN("libzip 解压验证失败");
             fsHelper.CleanupTempExtractDir(extractPath);
             return false;
         }
     }
     else {
-        g_logger<<"[ERROR] libzip 解压失败"<<std::endl;
+        LOG_ERROR("libzip 解压失败");
         fsHelper.CleanupTempExtractDir(extractPath);
         return false;
     }
 }
 bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::string& extractPath) {
-    g_logger<<"[INFO] 使用原始libzip解压..."<<std::endl;
+    LOG_INFO("使用原始libzip解压...");
 
     int err=0;
     zip_t* zip=zip_open(zipFilePath.c_str(),0,&err);
     if(!zip) {
-        g_logger<<"[ERROR] 无法打开ZIP文件: "<<zipFilePath<<"，错误码: "<<err<<std::endl;
+        LOG_ERROR("无法打开ZIP文件: {}，错误码: {}", zipFilePath, err);
         return false;
     }
 
     zip_int64_t numEntries=zip_get_num_entries(zip,0);
-    g_logger<<"[INFO] 总共 "<<numEntries<<" 个条目需要解压"<<std::endl;
+    LOG_INFO("总共 {} 个条目需要解压", numEntries);
 
     if(numEntries<=0) {
-        g_logger<<"[ERROR] ZIP文件为空"<<std::endl;
+        LOG_ERROR("ZIP文件为空");
         zip_close(zip);
         return false;
     }
-    g_logger<<"[INFO] 第一步：创建目录结构..."<<std::endl;
+    LOG_INFO("第一步：创建目录结构...");
 
     std::vector<std::string> fileEntries;
 
@@ -129,7 +129,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         if(!name) {
             name=zip_get_name(zip,i,0);
             if(!name) {
-                g_logger<<"[WARN] 无法获取文件 "<<i<<" 的文件名"<<std::endl;
+                LOG_WARN("无法获取文件 {} 的文件名", i);
                 continue;
             }
         }
@@ -137,9 +137,9 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         std::string safeName=originalName;
         std::wstring wideName=fsHelper.Utf8ToWide(originalName);
         if(wideName.empty()) {
-            g_logger<<"[WARN] 无法转换文件名: "<<originalName<<std::endl;
+            LOG_WARN("无法转换文件名: {}", originalName);
             safeName="file_"+std::to_string(i)+".dat";
-            g_logger<<"[INFO] 使用替代文件名: "<<safeName<<std::endl;
+            LOG_INFO("使用替代文件名: {}", safeName);
         }
         std::string fullPath;
         std::wstring wideExtractPath=fsHelper.Utf8ToWide(extractPath);
@@ -149,7 +149,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                 safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] ZIP目录路径遍历被阻止: "<<e.what()<<" (条目: "<<originalName<<")"<<std::endl;
+                LOG_ERROR("ZIP目录路径遍历被阻止: {} (条目: {})", e.what(), originalName);
                 continue;
             }
             fullPath=fsHelper.WideToUtf8(safeFullPath);
@@ -159,11 +159,11 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                     std::filesystem::create_directories(dirPath);
 
                     if(i%50==0) {
-                        g_logger<<"[DEBUG] 创建目录: "<<originalName<<std::endl;
+                        LOG_DEBUG("创建目录: {}", originalName);
                     }
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[WARN] 无法创建目录 "<<originalName<<": "<<e.what()<<std::endl;
+                    LOG_WARN("无法创建目录 {}: {}", originalName, e.what());
                 }
                 continue;
             }
@@ -173,8 +173,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                 fullPath=FileSystemHelper::SecureCombine(extractPath,safeName);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] Path traversal blocked: "<<e.what()
-                    <<" (entry: "<<originalName<<")"<<std::endl;
+				LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
                 continue;
             }
         }
@@ -182,18 +181,18 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             try {
                 std::filesystem::create_directories(fullPath);
                 if(i%50==0) {
-                    g_logger<<"[DEBUG] 创建目录: "<<originalName<<std::endl;
+                    LOG_DEBUG("创建目录: {}", originalName);
                 }
             }
             catch(const std::exception& e) {
-                g_logger<<"[WARN] 无法创建目录 "<<originalName<<": "<<e.what()<<std::endl;
+                LOG_WARN("无法创建目录 {}: {}", originalName, e.what());
             }
             continue;
         }
         fileEntries.push_back(originalName);
     }
 
-    g_logger<<"[INFO] 第二步：解压 "<<fileEntries.size()<<" 个文件..."<<std::endl;
+    LOG_INFO("第二步：解压 {} 个文件...", fileEntries.size());
     const size_t bufferSize=65536;
     std::vector<char> buffer(bufferSize);
     int extractedFiles=0;
@@ -207,7 +206,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         if(index<0) {
             index=zip_name_locate(zip,originalName.c_str(),0);
             if(index<0) {
-                g_logger<<"[WARN] 无法找到文件索引: "<<originalName<<std::endl;
+                LOG_WARN("无法找到文件索引: {}", originalName);
                 failedFiles++;
                 continue;
             }
@@ -215,7 +214,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
 
         zip_file_t* zfile=zip_fopen_index(zip,index,0);
         if(!zfile) {
-            g_logger<<"[WARN] 无法打开文件: "<<originalName<<std::endl;
+            LOG_WARN("无法打开文件: {}", originalName);
             failedFiles++;
             continue;
         }
@@ -235,8 +234,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                 safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] ZIP path traversal blocked: "<<e.what()
-                    <<" (entry: "<<originalName<<")"<<std::endl;
+				LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
                 failedFiles++;
                 unicodeFailedFiles++;
                 continue;
@@ -258,7 +256,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             }
             else {
                 DWORD error=GetLastError();
-                g_logger<<"[ERROR] 无法创建文件: "<<originalName<<" (错误码: "<<error<<")"<<std::endl;
+                LOG_ERROR("无法创建文件: {} (错误码: {})", originalName, error);
                 failedFiles++;
                 unicodeFailedFiles++;
                 std::string asciiName="file_"+std::to_string(extractedFiles+failedFiles)+".dat";
@@ -267,12 +265,12 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                     asciiFullPath=FileSystemHelper::SecureCombine(extractPath,asciiName);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] ASCII后备路径遍历被阻止: "<<e.what()<<std::endl;
+                    LOG_ERROR("ASCII后备路径遍历被阻止: {} (条目: {})", e.what(), originalName);
                     failedFiles++;
                     continue;
                 }
 
-                g_logger<<"[INFO] 尝试使用ASCII名称: "<<asciiName<<std::endl;
+                LOG_INFO("尝试使用ASCII名称: {}", asciiName);
 
                 std::ofstream asciiFile(asciiFullPath,std::ios::binary);
                 if(asciiFile) {
@@ -288,13 +286,13 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
                         }
                         asciiFile.close();
                         extractedFiles++;
-                        g_logger<<"[INFO] 文件 "<<originalName<<" 保存为 "<<asciiName<<std::endl;
+                        LOG_INFO("文件 {} 保存为 {}", originalName, asciiName);
                     }
                 }
             }
         }
         else {
-            g_logger<<"[WARN] 无法处理Unicode文件名: "<<originalName<<std::endl;
+            LOG_WARN("无法处理Unicode文件名: {}", originalName);
             failedFiles++;
             unicodeFailedFiles++;
         }
@@ -304,10 +302,10 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             int percent=static_cast<int>((processed*100)/(std::max)(totalFiles,1));
             std::cout<<"\r解压进度: "<<processed<<"/"<<totalFiles<<" 文件 ("<<percent<<"%)，成功: "<<extractedFiles<<"，失败: "<<failedFiles<<"      ";
             std::cout.flush();
-            g_logger<<"[INFO] 已处理 "<<processed<<"/"<<totalFiles<<" 个文件 ("<<percent<<"%)"<<std::endl;
+            LOG_INFO("已处理 {} / {} 个文件 ({}%)", processed, totalFiles, percent);
         }
         if(failedFiles>=20&&idx>100) {
-            g_logger<<"[ERROR] 失败文件过多，停止解压 (总失败: "<<failedFiles<<", Unicode失败: "<<unicodeFailedFiles<<")"<<std::endl;
+            LOG_ERROR("失败文件过多，停止解压 (总失败: {}, Unicode失败: {})", failedFiles, unicodeFailedFiles);
             break;
         }
     }
@@ -315,16 +313,16 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
     zip_close(zip);
 
     std::cout<<"\r解压完成: "<<extractedFiles<<"/"<<totalFiles<<" 个文件已提取，失败: "<<failedFiles<<" (Unicode失败: "<<unicodeFailedFiles<<")                  "<<std::endl;
-    g_logger<<"[INFO] 解压完成: "<<extractedFiles<<"/"<<totalFiles<<" 个文件已提取，失败: "<<failedFiles<<std::endl;
+    LOG_INFO("解压完成: {} / {} 个文件已提取，失败: {}", extractedFiles, totalFiles, failedFiles);
 
     if(unicodeFailedFiles>0) {
-        g_logger<<"[WARN] "<<unicodeFailedFiles<<" 个文件因Unicode编码问题未能正确提取"<<std::endl;
-        g_logger<<"[WARN] 建议检查系统区域设置或使用英文文件名"<<std::endl;
+        LOG_WARN("{} 个文件因Unicode编码问题未能正确提取", unicodeFailedFiles);
+        LOG_WARN("建议检查系统区域设置或使用英文文件名");
     }
     float successRate=(totalFiles>0)?(extractedFiles*100.0f/totalFiles):0.0f;
-    g_logger<<"[INFO] 解压成功率: "<<std::fixed<<std::setprecision(1)<<successRate<<"%"<<std::endl;
+	LOG_INFO("解压成功率: {:.1f}%",successRate);
     if(successRate<80.0f) {
-        g_logger<<"[WARN] 解压成功率较低，可能需要手动检查"<<std::endl;
+        LOG_WARN("解压成功率较低，可能需要手动检查");
         return false;
     }
 
@@ -333,7 +331,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
 bool ZipExtractor::IsValidZipFile(const std::string& filePath) {
     std::ifstream file(filePath,std::ios::binary);
     if(!file) {
-        g_logger<<"[DEBUG] 无法打开文件: "<<filePath<<std::endl;
+        LOG_DEBUG("无法打开文件: {}", filePath);
         return false;
     }
 
@@ -342,7 +340,7 @@ bool ZipExtractor::IsValidZipFile(const std::string& filePath) {
     file.seekg(0,std::ios::beg);
 
     if(fileSize<22) {
-        g_logger<<"[DEBUG] 文件太小 ("<<fileSize<<" 字节)，可能是空ZIP文件"<<std::endl;
+        LOG_DEBUG("文件太小 ({} 字节)，可能是空ZIP文件", fileSize);
 
         if(fileSize==0) {
             return true;
@@ -354,7 +352,7 @@ bool ZipExtractor::IsValidZipFile(const std::string& filePath) {
         if(fileSize==22) {
             if(buffer[0]==0x50&&buffer[1]==0x4B&&
                 buffer[2]==0x05&&buffer[3]==0x06) {
-                g_logger<<"[DEBUG] 有效的空ZIP文件（只有目录结束标记）"<<std::endl;
+                LOG_DEBUG("有效的空ZIP文件（只有目录结束标记）");
                 return true;
             }
         }
@@ -366,39 +364,38 @@ bool ZipExtractor::IsValidZipFile(const std::string& filePath) {
     file.read(header,4);
 
     if(file.gcount()<4) {
-        g_logger<<"[DEBUG] 无法读取文件头"<<std::endl;
+        LOG_DEBUG("无法读取文件头");
         return false;
     }
     bool isZipSignature=(header[0]==0x50&&header[1]==0x4B&&
         header[2]==0x03&&header[3]==0x04);
 
     if(!isZipSignature) {
-        g_logger<<"[DEBUG] 文件头不是有效的ZIP签名: ";
-        for(int i=0; i<4; ++i) {
-            g_logger<<std::hex<<(int)(unsigned char)header[i]<<" ";
-        }
-        g_logger<<std::dec<<std::endl;
+        LOG_DEBUG("文件头不是有效的ZIP签名: {:02x} {:02x} {:02x} {:02x}",
+            static_cast<unsigned char>(header[0]),
+            static_cast<unsigned char>(header[1]),
+            static_cast<unsigned char>(header[2]),
+            static_cast<unsigned char>(header[3]));
 
         if(fileSize==0) {
-            g_logger<<"[DEBUG] 空文件，可能是空目录"<<std::endl;
+            LOG_DEBUG("空文件，可能是空目录");
             return true;
         }
-
         return false;
     }
 
-    g_logger<<"[DEBUG] 有效的ZIP文件签名，文件大小: "<<pRepoter.FormatBytes(fileSize)<<std::endl;
+    LOG_DEBUG("有效的ZIP文件签名，文件大小: {}", pRepoter.FormatBytes(fileSize));
     return true;
 }
 //zhihouyizou
 bool ZipExtractor::CheckServerResponse(const std::string& url) {
-    g_logger<<"[DEBUG] 检查服务器响应: "<<url<<std::endl;
+    LOG_DEBUG("检查服务器响应: {}", url);
 
     try {
         std::string tempFile=std::filesystem::temp_directory_path().string()+"/test_response.bin";
 
         if(!httpClient.DownloadFileWithProgress(url,tempFile,nullptr,nullptr)) {
-            g_logger<<"[DEBUG] 服务器响应测试失败"<<std::endl;
+            LOG_DEBUG("服务器响应测试失败");
             return false;
         }
 
@@ -407,20 +404,20 @@ bool ZipExtractor::CheckServerResponse(const std::string& url) {
         std::filesystem::remove(tempFile);
 
         if(ec||fileSize==0) {
-            g_logger<<"[DEBUG] 服务器返回空文件或错误"<<std::endl;
+            LOG_DEBUG("服务器返回空文件或错误");
             return false;
         }
 
-        g_logger<<"[DEBUG] 服务器响应正常，文件大小: "<<pRepoter.FormatBytes(fileSize)<<std::endl;
+        LOG_DEBUG("服务器响应正常，文件大小: {}", pRepoter.FormatBytes(fileSize));
         return true;
     }
     catch(const std::exception& e) {
-        g_logger<<"[DEBUG] 检查服务器响应异常: "<<e.what()<<std::endl;
+        LOG_DEBUG("检查服务器响应异常: {}", e.what());
         return false;
     }
 }
 bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& relativePath,const std::string& targetBaseDir) {
-    g_logger<<"[INFO] 下载并解压: "<<url<<" -> "<<relativePath<<std::endl;
+    LOG_DEBUG("下载并解压: {} -> {}", url, relativePath);
 
     DWORD pid=GetCurrentProcessId();
     auto timestamp=std::chrono::steady_clock::now().time_since_epoch().count();
@@ -442,18 +439,18 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
     pRepoter.ClearProgressLine();
 
     if(!downloadSuccess) {
-        g_logger<<"[ERROR] 下载失败: "<<url<<std::endl;
+        LOG_ERROR("下载失败: {}", url);
         return false;
     }
     std::error_code ec;
     auto fileSize=std::filesystem::file_size(tempZip,ec);
     if(ec) {
-        g_logger<<"[ERROR] 无法获取文件大小: "<<ec.message()<<std::endl;
+        LOG_ERROR("无法获取文件大小: {}", ec.message());
         std::filesystem::remove(tempZip);
         return false;
     }
 
-    g_logger<<"[INFO] 下载完成，文件大小: "<<pRepoter.FormatBytes(fileSize)<<std::endl;
+    LOG_INFO("下载完成，文件大小: {}", pRepoter.FormatBytes(fileSize));
     if(fileSize<1024) {
         std::ifstream file(tempZip,std::ios::binary);
         if(file) {
@@ -463,42 +460,42 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
                 content.find("Not Found")!=std::string::npos||
                 content.find("Error")!=std::string::npos) {
 
-                g_logger<<"[INFO] 服务器返回错误页面，可能是空文件夹，将创建空目录"<<std::endl;
-                g_logger<<"[DEBUG] 服务器响应: "<<content<<std::endl;
+                LOG_INFO("服务器返回错误页面，可能是空文件夹，将创建空目录");
+                LOG_DEBUG("服务器响应: {}", content);
                 std::filesystem::remove(tempZip);
                 std::string extractPath;
                 try {
                     extractPath=FileSystemHelper::SecureCombine(targetBaseDir,relativePath);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 下载并解压中的路径遍历被阻止: "<<e.what()<<std::endl;
+                    LOG_ERROR("下载并解压中的路径遍历被阻止: {}", e.what());
                     std::filesystem::remove(tempZip);
                     return false;
                 }
                 try {
                     if(!std::filesystem::exists(extractPath)) {
                         std::filesystem::create_directories(extractPath);
-                        g_logger<<"[INFO] 已创建空目录: "<<extractPath<<std::endl;
+                        LOG_INFO("已创建空目录: {}", extractPath);
                     }
                     else {
-                        g_logger<<"[INFO] 目录已存在: "<<extractPath<<std::endl;
+                        LOG_INFO("目录已存在: {}", extractPath);
                     }
                     return true;
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 创建目录失败: "<<e.what()<<std::endl;
+                    LOG_ERROR("创建目录失败: {}", e.what());
                     return false;
                 }
             }
         }
     }
     if(!IsValidZipFile(tempZip)) {
-        g_logger<<"[ERROR] 下载的文件不是有效的ZIP文件，大小: "<<pRepoter.FormatBytes(fileSize)<<std::endl;
+        LOG_ERROR("下载的文件不是有效的ZIP文件，大小: {}", pRepoter.FormatBytes(fileSize));
         if(fileSize<1024) {
             std::ifstream file(tempZip,std::ios::binary);
             if(file) {
                 std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-                g_logger<<"[DEBUG] 文件内容: "<<content<<std::endl;
+                LOG_DEBUG("文件内容: {}", content);
             }
             file.close();
         }
@@ -511,18 +508,18 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
         extractPath=FileSystemHelper::SecureCombine(targetBaseDir,relativePath);
     }
     catch(const std::exception& e) {
-        g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+		LOG_ERROR("路径遍历被阻止: {}",e.what());
         return false;
     }
     if(std::filesystem::exists(extractPath)) {
-        g_logger<<"[INFO] 备份原有目录..."<<std::endl;
+        LOG_INFO("备份原有目录...");
         fsHelper.BackupFile(extractPath);
     }
     bool extractSuccess=ExtractZipOriginal(tempZip,extractPath);
     std::filesystem::remove(tempZip);
 
     if(!extractSuccess) {
-        g_logger<<"[ERROR] 解压失败"<<std::endl;
+        LOG_ERROR("解压失败");
         return false;
     }
 

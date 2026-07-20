@@ -38,13 +38,13 @@ UpdateOrchestrator::UpdateOrchestrator(const std::string& config,const std::stri
     hasCachedUpdateInfo(false),
     gameDirectory(gameDir)
 {
-    g_logger<<"[DEBUG] McUpdaterClient配置: "<<config<<std::endl;
+    LOG_DEBUG("McUpdaterClient配置: {}", config);
 }
 UpdateOrchestrator::~UpdateOrchestrator() {
 }
 bool UpdateOrchestrator::CheckForUpdatesByHash() {
     if(!enableApiCache) {
-        g_logger<<"[INFO] API缓存已禁用，强制重新获取更新信息"<<std::endl;
+        LOG_INFO("API缓存已禁用，强制重新获取更新信息");
         hasCachedUpdateInfo=false;
         cachedUpdateInfo=Json::Value();
     }
@@ -53,12 +53,12 @@ bool UpdateOrchestrator::CheckForUpdatesByHash() {
 
     if(hasCachedUpdateInfo) {
         updateInfo=cachedUpdateInfo;
-        g_logger<<"[INFO] 使用缓存的更新信息进行哈希检查"<<std::endl;
+        LOG_INFO("使用缓存的更新信息进行哈希检查");
     }
     else {
         updateInfo=updateChecker.FetchUpdateInfo();
         if(updateInfo.isNull()) {
-            g_logger<<"[ERROR] 错误: 无法获取更新信息"<<std::endl;
+            LOG_ERROR("错误: 无法获取更新信息");
             return false;
         }
         cachedUpdateInfo=updateInfo;
@@ -68,56 +68,56 @@ bool UpdateOrchestrator::CheckForUpdatesByHash() {
     std::string localVersion=configManager.ReadVersion();
     std::string remoteVersion=updateInfo["version"].asString();
 
-    g_logger<<"[INFO] 本地版本: "<<localVersion<<std::endl;
-    g_logger<<"[INFO] 远程版本: "<<remoteVersion<<std::endl;
+    LOG_INFO("本地版本: {}", localVersion);
+    LOG_INFO("远程版本: {}", remoteVersion);
 
     bool isConsistent=hashSyncer.CheckFileConsistency(updateInfo["files"],updateInfo["directories"]);
 
     if(IsNewerVersion(localVersion,remoteVersion)) {
-        std::cout<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
+        LOG_INFO("发现新版本: {}", remoteVersion);
 
         if(hashSyncer.ShouldForceHashUpdate(localVersion,remoteVersion)) {
-            g_logger<<"[INFO] 检测到跨越多个版本更新"<<std::endl;
+            LOG_INFO("检测到跨越多个版本更新");
         }
 
         if(!isConsistent) {
-            g_logger<<"[INFO] 文件一致性检查失败，需要更新"<<std::endl;
+            LOG_INFO("文件一致性检查失败，需要更新");
             return true;
         }
         else {
-            g_logger<<"[INFO] 版本号更新但文件已是最新，无需更新"<<std::endl;
+            LOG_INFO("版本号更新但文件已是最新，无需更新");
             return false;
         }
     }
     else if(localVersion==remoteVersion) {
         if(!isConsistent) {
-            g_logger<<"[INFO] 版本号相同但文件不一致，需要修复"<<std::endl;
+			LOG_INFO("版本号相同但文件不一致，需要修复");
             return true;
         }
         else {
-            g_logger<<"[INFO] 当前已是最新版本且文件完整"<<std::endl;
+            LOG_INFO("当前已是最新版本且文件完整");
             return false;
         }
     }
     else {
         if(!isConsistent) {
-            g_logger<<"[WARN] 本地版本较新但文件不一致，建议修复"<<std::endl;
-            std::cout<<"[WARN] 本地版本较新但文件可能损坏，是否修复？(y/n): ";
+            LOG_WARN("本地版本较新但文件不一致，建议修复");
+            std::cout<<"本地版本较新但文件可能损坏，是否修复？(y/n): ";
             char choice;
             std::cin>>choice;
             return (choice=='y'||choice=='Y');
         }
         else {
-            g_logger<<"[INFO] 本地版本较新且文件完整"<<std::endl;
+            LOG_INFO("本地版本较新且文件完整");
             return false;
         }
     }
 }
 bool UpdateOrchestrator::CheckForUpdates() {
-    g_logger<<"[INFO] 开始检查更新..."<<std::endl;
+    LOG_INFO("开始检查更新...");
 
     if(!enableApiCache) {
-        g_logger<<"[INFO] API缓存已禁用，强制重新获取更新信息"<<std::endl;
+        LOG_INFO("API缓存已禁用，强制重新获取更新信息");
         hasCachedUpdateInfo=false;
         cachedUpdateInfo=Json::Value();
     }
@@ -125,7 +125,7 @@ bool UpdateOrchestrator::CheckForUpdates() {
     Json::Value updateInfo;
     if(hasCachedUpdateInfo) {
         updateInfo=cachedUpdateInfo;
-        g_logger<<"[INFO] 使用缓存的更新信息"<<std::endl;
+        LOG_INFO("使用缓存的更新信息");
     }
     else {
         updateInfo=updateChecker.FetchUpdateInfo();
@@ -136,7 +136,7 @@ bool UpdateOrchestrator::CheckForUpdates() {
     }
 
     if(updateInfo.isNull()) {
-        g_logger<<"[ERROR] 错误: 无法获取更新信息"<<std::endl;
+        LOG_ERROR("错误: 无法获取更新信息");
         return false;
     }
 
@@ -146,12 +146,12 @@ bool UpdateOrchestrator::CheckForUpdates() {
         std::string remoteLauncherVersion=updateInfo["launcher"]["version"].asString();
         std::string localLauncherVersion=configManager.ReadLauncherVersion();
 
-        g_logger<<"[INFO] 检测到启动器更新："<<localLauncherVersion<<" -> "<<remoteLauncherVersion<<std::endl;
+        LOG_INFO("检测到启动器更新：{} -> {}", localLauncherVersion, remoteLauncherVersion);
 
         std::string currentVersionBackup=localLauncherVersion;
 
         if(configManager.ReadAutoUpdate()) {
-            g_logger<<"[INFO] 自动更新已开启，开始更新启动器..."<<std::endl;
+            LOG_INFO("自动更新已开启，开始更新启动器...");
         }
         else {
             std::cout<<"\n[INFO] 发现启动器更新："<<localLauncherVersion<<" -> "<<remoteLauncherVersion<<std::endl;
@@ -160,22 +160,22 @@ bool UpdateOrchestrator::CheckForUpdates() {
             std::cin>>choice;
 
             if(!(choice=='y'||choice=='Y')) {
-                g_logger<<"[INFO] 用户取消启动器更新"<<std::endl;
+                LOG_INFO("用户取消启动器更新");
                 launcherNeedsUpdate=false;
             }
         }
 
         if(launcherNeedsUpdate) {
             if(CheckAndApplyLauncherUpdate()) {
-                g_logger<<"[INFO] 启动器更新流程已启动，程序即将退出..."<<std::endl;
+                LOG_INFO("启动器更新流程已启动，程序即将退出...");
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 std::exit(0);
             }
             else {
-                g_logger<<"[ERROR] 启动器更新失败"<<std::endl;
+                LOG_ERROR("启动器更新失败");
                 if(configManager.ReadLauncherVersion()!=currentVersionBackup) {
                     configManager.WriteLauncherVersion(currentVersionBackup);
-                    g_logger<<"[INFO] 已恢复启动器版本号为原值："<<currentVersionBackup<<std::endl;
+                    LOG_INFO("已恢复启动器版本号为原值：{}", currentVersionBackup);
                 }
             }
         }
@@ -184,11 +184,11 @@ bool UpdateOrchestrator::CheckForUpdates() {
     std::string serverUpdateMode;
     if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
         serverUpdateMode=updateInfo["update_mode"].asString();
-        g_logger<<"[INFO] 服务端强制使用更新模式: "<<serverUpdateMode<<std::endl;
+        LOG_INFO("服务端强制使用更新模式: {}", serverUpdateMode);
     }
     else {
         serverUpdateMode=configManager.ReadUpdateMode();
-        g_logger<<"[INFO] 使用客户端配置的更新模式: "<<serverUpdateMode<<std::endl;
+        LOG_INFO("使用客户端配置的更新模式: {}", serverUpdateMode);
     }
 
     if(serverUpdateMode=="hash") {
@@ -199,19 +199,19 @@ bool UpdateOrchestrator::CheckForUpdates() {
         std::string remoteVersion=updateInfo["version"].asString();
 
         if(IsNewerVersion(localVersion,remoteVersion)) {
-            g_logger<<"[INFO] 发现新版本: "<<remoteVersion<<std::endl;
+            LOG_INFO("发现新版本: {}", remoteVersion);
             updateChecker.DisplayChangelog(updateInfo["changelog"]);
             return true;
         }
         else {
-            g_logger<<"[INFO] 当前已是最新版本"<<std::endl;
+            LOG_INFO("当前已是最新版本");
             return false;
         }
     }
 }
 bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
     if(!enableApiCache) {
-        g_logger<<"[INFO] API缓存已禁用，强制重新获取更新信息"<<std::endl;
+        LOG_INFO("API缓存已禁用，强制重新获取更新信息");
         hasCachedUpdateInfo=false;
         cachedUpdateInfo=Json::Value();
     }
@@ -219,44 +219,44 @@ bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
     Json::Value updateInfo;
     if(hasCachedUpdateInfo) {
         updateInfo=cachedUpdateInfo;
-        g_logger<<"[INFO] 使用缓存的更新信息进行更新"<<std::endl;
+        LOG_INFO("使用缓存的更新信息进行更新");
     }
     else {
         updateInfo=updateChecker.FetchUpdateInfo();
     }
 
     if(updateInfo.isNull()) {
-        g_logger<<"[ERROR] 错误: 无法获取更新信息"<<std::endl;
+        LOG_ERROR("错误: 无法获取更新信息");
         return false;
     }
 
     std::string serverUpdateMode;
     if(updateInfo.isMember("update_mode")&&!updateInfo["update_mode"].asString().empty()) {
         serverUpdateMode=updateInfo["update_mode"].asString();
-        g_logger<<"[INFO] 服务端强制使用更新模式: "<<serverUpdateMode<<std::endl;
+        LOG_INFO("服务端强制使用更新模式: {}", serverUpdateMode);
     }
     else {
         serverUpdateMode=configManager.ReadUpdateMode();
-        g_logger<<"[INFO] 使用客户端配置的更新模式: "<<serverUpdateMode<<std::endl;
+        LOG_INFO("使用客户端配置的更新模式: {}", serverUpdateMode);
     }
 
     std::string newVersion=updateInfo["version"].asString();
     std::string localVersion=configManager.ReadVersion();
 
     if(serverUpdateMode=="hash") {
-        g_logger<<"[INFO] 开始更新到版本: "<<newVersion<<" (哈希模式)"<<std::endl;
+        LOG_INFO("开始更新到版本: {} (哈希模式)", newVersion);
         if(hashSyncer.SyncFilesByHash(updateInfo)) {
-            g_logger<<"[INFO] 文件同步完成，更新版本信息..."<<std::endl;
+            LOG_INFO("文件同步完成，更新版本信息...");
             UpdateLocalVersion(newVersion);
             return true;
         }
         else {
-            g_logger<<"[ERROR] 错误: 更新过程中出现错误!"<<std::endl;
+            LOG_ERROR("错误: 更新过程中出现错误!");
             return false;
         }
     }
     else {
-        g_logger<<"[INFO] 开始更新到版本: "<<newVersion<<" (版本号模式)"<<std::endl;
+        LOG_INFO("开始更新到版本: {} (版本号模式)", newVersion);
         bool useIncremental=false;
         if(updateInfo.isMember("incremental_packages")&&
             updateInfo["incremental_packages"].isArray()&&
@@ -264,15 +264,15 @@ bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
 
             if(incrementalPlanner.ShouldUseIncrementalUpdate(localVersion,newVersion)) {
                 useIncremental=true;
-                g_logger<<"[INFO] 检测到增量更新包，使用增量更新模式"<<std::endl;
+                LOG_INFO("检测到增量更新包，使用增量更新模式");
 
                 if(incrementalPlanner.ApplyIncrementalUpdate(updateInfo,localVersion,newVersion)) {
-                    g_logger<<"[INFO] 增量更新完成，更新版本信息..."<<std::endl;
+                    LOG_INFO("增量更新完成，更新版本信息...");
                     UpdateLocalVersion(newVersion);
                     return true;
                 }
                 else {
-                    g_logger<<"[WARN] 增量更新失败，回退到全量更新"<<std::endl;
+                    LOG_WARN("增量更新失败，回退到全量更新");
                 }
             }
         }
@@ -281,9 +281,9 @@ bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
 
         Json::Value fileList=updateInfo["files"];
         if(fileList.isArray()&&fileList.size()>0) {
-            g_logger<<"[INFO] 处理文件更新..."<<std::endl;
+            LOG_INFO("处理文件更新...");
             if(!SyncFiles(fileList,forceSync)) {
-                g_logger<<"[ERROR] 错误: 文件更新失败"<<std::endl;
+                LOG_ERROR("错误: 文件更新失败");
                 if(forceSync) return false;
                 allSuccess=false;
             }
@@ -291,7 +291,7 @@ bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
 
         Json::Value directoryList=updateInfo["directories"];
         if(directoryList.isArray()&&directoryList.size()>0) {
-            g_logger<<"[INFO] 处理目录更新..."<<std::endl;
+            LOG_INFO("处理目录更新...");
             for(const auto& dirInfo:directoryList) {
                 if(!dirInfo.isObject()) continue;
 
@@ -299,31 +299,31 @@ bool UpdateOrchestrator::ForceUpdate(bool forceSync) {
                 std::string url=dirInfo["url"].asString();
 
                 if(path.empty()||url.empty()) {
-                    g_logger<<"[ERROR] 错误: 目录信息不完整: path="<<path<<", url="<<url<<std::endl;
+                    LOG_ERROR("错误: 目录信息不完整: path={}, url={}", path, url);
                     if(forceSync) return false;
                     allSuccess=false;
                     continue;
                 }
 
-                g_logger<<"[INFO] 更新目录: "<<path<<std::endl;
+                LOG_INFO("更新目录: {}", path);
                 if(!zipExtractor.DownloadAndExtract(url,path,gameDirectory)) {
-                    g_logger<<"[ERROR] 错误: 目录更新失败: "<<path<<std::endl;
+                    LOG_ERROR("错误: 目录更新失败: {}", path);
                     if(forceSync) return false;
                     allSuccess=false;
                 }
                 else {
-                    g_logger<<"[INFO] 目录更新成功: "<<path<<std::endl;
+                    LOG_INFO("目录更新成功: {}", path);
                 }
             }
         }
 
         if(allSuccess) {
-            g_logger<<"[INFO] 文件同步完成，更新版本信息..."<<std::endl;
+            LOG_INFO("文件同步完成，更新版本信息...");
             UpdateLocalVersion(newVersion);
             return true;
         }
         else {
-            g_logger<<"[ERROR] 错误: 更新过程中出现错误！"<<std::endl;
+            LOG_ERROR("错误: 更新过程中出现错误！");
             return false;
         }
     }
@@ -338,7 +338,7 @@ bool UpdateOrchestrator::CheckAndApplyLauncherUpdate() {
     }
 
     if(updateInfo.isNull()||!updateInfo.isMember("launcher")) {
-        g_logger<<"[ERROR] 无法获取启动器更新信息"<<std::endl;
+        LOG_ERROR("无法获取启动器更新信息");
         return false;
     }
 
@@ -348,48 +348,48 @@ bool UpdateOrchestrator::CheckAndApplyLauncherUpdate() {
     std::string expectedHash=launcherInfo["hash"].asString();
 
     if(downloadUrl.empty()) {
-        g_logger<<"[ERROR] 启动器下载URL为空"<<std::endl;
+        LOG_ERROR("启动器下载URL为空");
         return false;
     }
 
-    g_logger<<"[INFO] 开始下载新启动器版本："<<remoteVersion<<std::endl;
-    g_logger<<"[INFO] 下载URL："<<downloadUrl<<std::endl;
+    LOG_INFO("开始下载新启动器版本：{}", remoteVersion);
+    LOG_INFO("下载URL：{}", downloadUrl);
 
     std::string currentVersion=configManager.ReadLauncherVersion();
 
     if(!selfUpdater.DownloadNewLauncher(downloadUrl,expectedHash,remoteVersion)) {
-        g_logger<<"[ERROR] 下载或验证启动器失败"<<std::endl;
+        LOG_ERROR("下载或验证启动器失败");
         if(configManager.ReadLauncherVersion()!=currentVersion) {
             configManager.WriteLauncherVersion(currentVersion);
-            g_logger<<"[INFO] 已恢复启动器版本号为："<<currentVersion<<std::endl;
+            LOG_INFO("已恢复启动器版本号为：{}", currentVersion);
         }
         return false;
     }
 
     if(!configManager.WriteLauncherVersion(remoteVersion)) {
-        g_logger<<"[ERROR] 无法更新配置中的启动器版本号，更新中止"<<std::endl;
+        LOG_ERROR("无法更新配置中的启动器版本号，更新中止");
         return false;
     }
     else {
-        g_logger<<"[INFO] 已更新配置中的启动器版本号："<<remoteVersion<<std::endl;
+        LOG_INFO("已更新配置中的启动器版本号：{}", remoteVersion);
     }
 
-    g_logger<<"[INFO] 启动器下载完成，准备应用更新..."<<std::endl;
+    LOG_INFO("启动器下载完成，准备应用更新...");
 
     if(selfUpdater.ApplyUpdate()) {
-        g_logger<<"[INFO] 启动器更新已启动，程序将退出"<<std::endl;
+        LOG_INFO("启动器更新已启动，程序将退出");
         return true;
     }
     else {
-        g_logger<<"[ERROR] 应用启动器更新失败"<<std::endl;
+        LOG_ERROR("应用启动器更新失败");
         configManager.WriteLauncherVersion(currentVersion);
-        g_logger<<"[INFO] 已回滚启动器版本号为："<<currentVersion<<std::endl;
+        LOG_INFO("已回滚启动器版本号为：{}", currentVersion);
         return false;
     }
 }
 bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
     if(!fileList.isArray()) {
-        g_logger<<"[ERROR] 错误: 文件列表格式错误"<<std::endl;
+        LOG_ERROR("错误: 文件列表格式错误");
         return false;
     }
 
@@ -405,21 +405,21 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
         std::string type=fileInfo.isMember("type")?fileInfo["type"].asString():"file";
 
         if(path.empty()||url.empty()) {
-            g_logger<<"[ERROR] 错误: 文件信息不完整: path="<<path<<", url="<<url<<std::endl;
+            LOG_ERROR("错误: 文件信息不完整: path={}, url={}", path, url);
             if(forceSync) return false;
             allSuccess=false;
             continue;
         }
 
-        g_logger<<"[DEBUG] 检查URL: "<<url<<std::endl;
+        LOG_DEBUG("检查URL: {}", url);
 
         if(type=="directory") {
-            g_logger<<"[INFO] 更新目录: "<<path<<std::endl;
+            LOG_INFO("更新目录: {}", path);
             if(fileInfo.isMember("hash")) {
-                g_logger<<"[DEBUG] 目录哈希: "<<fileInfo["hash"].asString()<<std::endl;
+                LOG_DEBUG("目录哈希: {}", fileInfo["hash"].asString());
             }
             if(fileInfo.isMember("size")) {
-                g_logger<<"[DEBUG] 期望大小: "<<progressReporter.FormatBytes(fileInfo["size"].asInt64())<<std::endl;
+                LOG_DEBUG("期望大小: {}", progressReporter.FormatBytes(fileInfo["size"].asInt64()));
             }
 
             std::string safeFullPath;
@@ -427,34 +427,34 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 safeFullPath=FileSystemHelper::SecureCombine(gameDirectory,path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<" (目录: "<<path<<")"<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {} (目录: {})", e.what(), path);
                 if(forceSync) return false;
                 allSuccess=false;
                 continue;
             }
 
             if(!zipExtractor.DownloadAndExtract(url,path,gameDirectory)) {
-                g_logger<<"[ERROR] 错误: 目录更新失败: "<<path<<std::endl;
+                LOG_ERROR("错误: 目录更新失败: {}", path);
 
                 if(forceSync) {
-                    g_logger<<"[ERROR] 强制同步模式，更新失败"<<std::endl;
+                    LOG_ERROR("强制同步模式，更新失败");
                     return false;
                 }
 
                 allSuccess=false;
 
-                g_logger<<"[WARN] 尝试创建空目录作为后备: "<<safeFullPath<<std::endl;
+                LOG_WARN("尝试创建空目录作为后备: {}", safeFullPath);
 
                 try {
                     std::filesystem::create_directories(safeFullPath);
-                    g_logger<<"[INFO] 已创建空目录: "<<safeFullPath<<std::endl;
+                    LOG_INFO("已创建空目录: {}", safeFullPath);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 创建空目录失败: "<<e.what()<<std::endl;
+                    LOG_ERROR("创建空目录失败: {}", e.what());
                 }
             }
             else {
-                g_logger<<"[INFO] 目录更新成功: "<<path<<std::endl;
+                LOG_INFO("目录更新成功: {}", path);
             }
         }
         else {
@@ -463,7 +463,7 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 fullPath=FileSystemHelper::SecureCombine(gameDirectory,path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 if(forceSync) return false;
                 allSuccess=false;
                 continue;
@@ -472,18 +472,18 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
             fsHelper.EnsureDirectoryExists(outputDir);
 
             if(std::filesystem::exists(fullPath)) {
-                g_logger<<"[INFO] 备份原有文件: "<<fullPath<<std::endl;
+                LOG_INFO("备份原有文件: {}", fullPath);
                 if(!fsHelper.BackupFile(fullPath)) {
-                    g_logger<<"[WARN] 警告: 文件备份失败，但继续更新..."<<std::endl;
+                    LOG_WARN("警告: 文件备份失败，但继续更新...");
                 }
             }
 
-            g_logger<<"[INFO] 下载文件: "<<url<<" -> "<<fullPath<<std::endl;
+            LOG_INFO("下载文件: {} -> {}", url, fullPath);
 
             long long expectedSize=0;
             if(fileInfo.isMember("size")) {
                 expectedSize=fileInfo["size"].asInt64();
-                g_logger<<"[DEBUG] 期望文件大小: "<<progressReporter.FormatBytes(expectedSize)<<std::endl;
+                LOG_DEBUG("期望文件大小: {}", progressReporter.FormatBytes(expectedSize));
             }
 
             std::string progressMessage="下载 "+path;
@@ -503,13 +503,13 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 },nullptr)) {
 
                 progressReporter.ClearProgressLine();
-                g_logger<<"[ERROR] 错误: 文件下载失败: "<<path<<std::endl;
+                LOG_ERROR("错误: 文件下载失败: {}", path);
                 if(forceSync) return false;
                 allSuccess=false;
             }
             else {
                 progressReporter.ClearProgressLine();
-                g_logger<<"[INFO] 文件下载成功: "<<path<<std::endl;
+                LOG_INFO("文件下载成功: {}", path);
             }
         }
     }
@@ -518,12 +518,12 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
 }
 void UpdateOrchestrator::UpdateLocalVersion(const std::string& newVersion) {
     if(configManager.WriteVersion(newVersion)) {
-        g_logger<<"[INFO] 版本信息已更新为: "<<newVersion<<std::endl;
+        LOG_INFO("版本信息已更新为: {}", newVersion);
         hasCachedUpdateInfo=false;
         cachedUpdateInfo=Json::Value();
     }
     else {
-        g_logger<<"[ERROR] 错误: 更新版本信息失败"<<std::endl;
+        LOG_ERROR("错误: 更新版本信息失败");
     }
 }
 void UpdateOrchestrator::OptimizeMemoryUsage() {
@@ -553,10 +553,10 @@ bool UpdateOrchestrator::ProcessLauncherUpdate(const Json::Value& updateInfo) {
     bool needsUpdate=(IsNewerVersion(localVersion,remoteVersion));
 
     if(needsUpdate) {
-        g_logger<<"[INFO] 检测到启动器更新："<<localVersion<<" -> "<<remoteVersion<<std::endl;
+        LOG_INFO("检测到启动器更新：{} -> {}", localVersion, remoteVersion);
     }
     else {
-        g_logger<<"[DEBUG] 启动器已是最新版本："<<localVersion<<std::endl;
+        LOG_DEBUG("启动器已是最新版本：{}", localVersion);
     }
 
     return needsUpdate;

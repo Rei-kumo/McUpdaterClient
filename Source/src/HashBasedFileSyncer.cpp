@@ -44,7 +44,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
     int mismatchedFiles=0;
     int totalChecked=0;
 
-    g_logger<<"[DEBUG] 开始文件一致性检查..."<<std::endl;
+    LOG_DEBUG("开始文件一致性检查...");
     const int BATCH_SIZE=50;
     int processedInBatch=0;
 
@@ -72,7 +72,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] Path traversal blocked in file consistency check: "<<e.what()<<std::endl;
+            LOG_ERROR("Path traversal blocked in file consistency check: {}", e.what());
             allFilesConsistent=false;
             mismatchedFiles++;
             continue;
@@ -82,7 +82,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
         processedInBatch++;
 
         if(!std::filesystem::exists(fullPath)) {
-            g_logger<<"[DEBUG] 文件不存在: "<<relativePath<<std::endl;
+            LOG_DEBUG("文件不存在: {}", relativePath);
             allFilesConsistent=false;
             missingFiles++;
             continue;
@@ -90,12 +90,12 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
         std::string actualHash=FileHasher::CalculateFileHashStream(fullPath,hashAlgorithm);
         if(actualHash.empty()) {
-            g_logger<<"[DEBUG] 无法计算文件哈希: "<<relativePath<<std::endl;
+            LOG_DEBUG("无法计算文件哈希: {}", relativePath);
             allFilesConsistent=false;
             mismatchedFiles++;
         }
         else if(actualHash!=expectedHash) {
-            g_logger<<"[DEBUG] 文件哈希不匹配: "<<relativePath<<std::endl;
+            LOG_DEBUG("文件哈希不匹配: {}", relativePath);
             allFilesConsistent=false;
             mismatchedFiles++;
         }
@@ -108,14 +108,14 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] Path traversal blocked in directory existence check: "<<e.what()<<std::endl;
+            LOG_ERROR("Path traversal blocked in directory existence check: {}", e.what());
             allFilesConsistent=false;
             missingFiles++;
             continue;
         }
 
         if(!std::filesystem::exists(fullPath)) {
-            g_logger<<"[DEBUG] 目录不存在: "<<relativePath<<std::endl;
+            LOG_DEBUG("目录不存在: {}", relativePath);
             allFilesConsistent=false;
             missingFiles++;
             continue;
@@ -132,7 +132,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
                 fileFullPath=FileSystemHelper::SecureCombine(fullPath,fileRelativePath);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] Path traversal blocked in directory content check: "<<e.what()<<std::endl;
+                LOG_ERROR("Path traversal blocked in directory content check: {}", e.what());
                 allFilesConsistent=false;
                 mismatchedFiles++;
                 continue;
@@ -142,7 +142,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             processedInBatch++;
 
             if(!std::filesystem::exists(fileFullPath)) {
-                g_logger<<"[DEBUG] 目录内文件不存在: "<<fileRelativePath<<std::endl;
+                LOG_DEBUG("目录内文件不存在: {}", fileRelativePath);
                 allFilesConsistent=false;
                 missingFiles++;
                 continue;
@@ -150,12 +150,12 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
             std::string actualHash=FileHasher::CalculateFileHashStream(fileFullPath,hashAlgorithm);
             if(actualHash.empty()) {
-                g_logger<<"[DEBUG] 无法计算目录内文件哈希: "<<fileRelativePath<<std::endl;
+                LOG_DEBUG("无法计算目录内文件哈希: {}", fileRelativePath);
                 allFilesConsistent=false;
                 mismatchedFiles++;
             }
             else if(actualHash!=expectedHash) {
-                g_logger<<"[DEBUG] 目录内文件哈希不匹配: "<<fileRelativePath<<std::endl;
+                LOG_DEBUG("目录内文件哈希不匹配: {}", fileRelativePath);
                 allFilesConsistent=false;
                 mismatchedFiles++;
             }
@@ -164,20 +164,20 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
 
     std::cout<<"\r检查完成: "<<totalChecked<<" 文件 ("<<missingFiles<<" 缺失, "<<mismatchedFiles<<" 不匹配)      "<<std::endl;
 
-    g_logger<<"[INFO] 文件一致性检查完成:"<<std::endl;
-    g_logger<<"[INFO]   总共检查: "<<totalChecked<<" 个文件"<<std::endl;
-    g_logger<<"[INFO]   缺失文件: "<<missingFiles<<" 个"<<std::endl;
-    g_logger<<"[INFO]   不匹配文件: "<<mismatchedFiles<<" 个"<<std::endl;
-    g_logger<<"[INFO]   文件一致性: "<<(allFilesConsistent?"通过":"失败")<<std::endl;
+    LOG_INFO("文件一致性检查完成:");
+    LOG_INFO("   总共检查: {} 个文件", totalChecked);
+    LOG_INFO("   缺失文件: {} 个", missingFiles);
+    LOG_INFO("   不匹配文件: {} 个", mismatchedFiles);
+    LOG_INFO("   文件一致性: {}", (allFilesConsistent?"通过":"失败"));
 
     return allFilesConsistent;
 }
 bool HashBasedFileSyncer::SyncFilesByHash(const Json::Value& updateInfo) {
-    g_logger<<"[INFO] 开始哈希模式同步..."<<std::endl;
-    g_logger<<"[DEBUG] 更新信息包含files字段: "<<updateInfo.isMember("files")<<std::endl;
-    g_logger<<"[DEBUG] 更新信息包含directories字段: "<<updateInfo.isMember("directories")<<std::endl;
-    g_logger<<"[DEBUG] 更新信息包含file_manifest字段: "<<updateInfo.isMember("file_manifest")<<std::endl;
-    g_logger<<"[DEBUG] 更新信息包含directory_manifest字段: "<<updateInfo.isMember("directory_manifest")<<std::endl;
+    LOG_INFO("开始哈希模式同步...");
+    LOG_DEBUG("更新信息包含files字段: {}", updateInfo.isMember("files"));
+    LOG_DEBUG("更新信息包含directories字段: {}", updateInfo.isMember("directories"));
+    LOG_DEBUG("更新信息包含file_manifest字段: {}", updateInfo.isMember("file_manifest"));
+    LOG_DEBUG("更新信息包含directory_manifest字段: {}", updateInfo.isMember("directory_manifest"));
 
     if(configManager.ReadEnableFileDeletion()) {
         ProcessDeleteList(updateInfo["delete_list"]);
@@ -186,14 +186,14 @@ bool HashBasedFileSyncer::SyncFilesByHash(const Json::Value& updateInfo) {
     Json::Value fileManifest=updateInfo["files"];
     Json::Value directoryManifest=updateInfo["directories"];
 
-    g_logger<<"[DEBUG] 文件清单数量: "<<fileManifest.size()<<std::endl;
-    g_logger<<"[DEBUG] 目录清单数量: "<<directoryManifest.size()<<std::endl;
+    LOG_DEBUG("文件清单数量: {}", fileManifest.size());
+    LOG_DEBUG("目录清单数量: {}", directoryManifest.size());
 
     if(!UpdateFilesByHash(fileManifest,directoryManifest)) {
         return false;
     }
 
-    g_logger<<"[INFO] 开始创建空目录..."<<std::endl;
+    LOG_INFO("开始创建空目录...");
     int createdEmptyDirs=0;
     for(const auto& dirInfo:directoryManifest) {
         bool isEmpty=dirInfo.isMember("is_empty")&&dirInfo["is_empty"].asBool();
@@ -204,20 +204,20 @@ bool HashBasedFileSyncer::SyncFilesByHash(const Json::Value& updateInfo) {
         if(!std::filesystem::exists(fullPath)) {
             try {
                 std::filesystem::create_directories(fullPath);
-                g_logger<<"[INFO] 创建空目录: "<<relativePath<<std::endl;
+                LOG_INFO("创建空目录: {}", relativePath);
                 createdEmptyDirs++;
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 创建空目录失败: "<<relativePath<<" - "<<e.what()<<std::endl;
+                LOG_ERROR("创建空目录失败: {} - {}", relativePath, e.what());
             }
         }
         else {
-            g_logger<<"[DEBUG] 空目录已存在: "<<relativePath<<std::endl;
+            LOG_DEBUG("空目录已存在: {}", relativePath);
         }
     }
-    g_logger<<"[INFO] 空目录创建完成，共创建 "<<createdEmptyDirs<<" 个"<<std::endl;
+    LOG_INFO("空目录创建完成，共创建 {} 个", createdEmptyDirs);
 
-    g_logger<<"[INFO] 哈希模式同步完成"<<std::endl;
+    LOG_INFO("哈希模式同步完成");
     return true;
 }
 bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,const Json::Value& directoryManifest) {
@@ -250,8 +250,8 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
             fullPathStr=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] Path traversal blocked in UpdateFilesByHash: "<<e.what()<<std::endl;
-            std::cout<<"[ERROR] 路径非法 "<<relativePath<<std::endl;
+            LOG_ERROR("Path traversal blocked in UpdateFilesByHash: {}", e.what());
+            LOG_ERROR("路径非法 {}", relativePath);
             allSuccess=false;
             continue;
         }
@@ -268,15 +268,15 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
                 testStream.close();
                 std::filesystem::remove(testFile);
                 canWrite=true;
-                g_logger<<"[DEBUG] 目录写入权限检查通过: "<<parentDir.string()<<std::endl;
+                LOG_DEBUG("目录写入权限检查通过: {}", parentDir.string());
             }
         }
         catch(const std::exception& e) {
-            g_logger<<"[DEBUG] 目录写入权限检查失败: "<<e.what()<<std::endl;
+            LOG_DEBUG("目录写入权限检查失败: {}", e.what());
         }
 
         if(!canWrite) {
-            g_logger<<"[ERROR] 错误: 目录没有写入权限: "<<parentDir.string()<<std::endl;
+            LOG_ERROR("错误: 目录没有写入权限: {}", parentDir.string());
             allSuccess=false;
             continue;
         }
@@ -284,7 +284,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         if(std::filesystem::exists(fullPath)) {
             std::string actualHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(!actualHash.empty()&&actualHash==expectedHash) {
-                g_logger<<"[INFO] 文件已是最新: "<<relativePath<<std::endl;
+                LOG_INFO("文件已是最新: {}", relativePath);
                 continue;
             }
         }
@@ -293,7 +293,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
             long long fileSize=fileInfo["size"].asInt64();
             int timeout=GetDownloadTimeoutForSize(fileSize);
             httpClient.SetDownloadTimeout(timeout);
-            g_logger<<"[DEBUG] 设置文件下载超时: "<<timeout<<"秒 (大小: "<<progressReporter.FormatBytes(fileSize)<<")"<<std::endl;
+            LOG_DEBUG("设置文件下载超时: {}秒 (大小: {})", timeout, progressReporter.FormatBytes(fileSize));
         }
 
         std::string progressMessage="进度";
@@ -333,7 +333,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         httpClient.SetDownloadTimeout(0);
 
         if(!downloadSuccess) {
-            g_logger<<"[ERROR} 下载失败！"<<std::endl;
+            LOG_ERROR("下载失败！");
             allSuccess=false;
             continue;
         }
@@ -345,13 +345,12 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         if(!expectedHash.empty()) {
             std::string downloadedHash=FileHasher::CalculateFileHashStream(fullPathStr,hashAlgorithm);
             if(downloadedHash!=expectedHash) {
-                g_logger<<"[ERROR]哈希不匹配，删除文件"<<std::endl;
-                g_logger<<"[ERROR] 文件哈希不匹配: "<<relativePath
-                    <<" 期望 "<<expectedHash<<" 实际 "<<downloadedHash<<std::endl;
+                LOG_ERROR("哈希不匹配，删除文件");
+                LOG_ERROR("文件哈希不匹配: {} 期望 {} 实际 {}", relativePath, expectedHash, downloadedHash);
                 std::error_code removeEc;
                 std::filesystem::remove(fullPathStr,removeEc);
                 if(removeEc) {
-                    g_logger<<"[WARN] 删除损坏文件失败: "<<removeEc.message()<<std::endl;
+                    LOG_WARN("删除损坏文件失败: {}", removeEc.message());
                 }
                 allSuccess=false;
                 continue;
@@ -369,11 +368,11 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
     std::string url=dirInfo["url"].asString();
     std::string hashAlgorithm=configManager.ReadHashAlgorithm();
 
-    g_logger<<"[INFO] 同步目录: "<<relativePath<<std::endl;
+    LOG_INFO("同步目录: {}", relativePath);
 
     std::vector<unsigned char> zipData;
     if(!httpClient.DownloadToMemory(url,zipData)) {
-        g_logger<<"[ERROR] 目录下载失败: "<<relativePath<<std::endl;
+        LOG_ERROR("目录下载失败: {}", relativePath);
         return false;
     }
 
@@ -387,7 +386,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
     fsHelper.EnsureDirectoryExists(tempDir);
 
     if(!zipExtractor.ExtractZip(zipData,tempDir)) {
-        g_logger<<"[ERROR] 解压失败: "<<relativePath<<std::endl;
+        LOG_ERROR("解压失败: {}", relativePath);
         return false;
     }
 
@@ -396,7 +395,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),relativePath);
     }
     catch(const std::exception& e) {
-        g_logger<<"[ERROR] 路径遍历被阻止: "<<relativePath<<" - "<<e.what()<<std::endl;
+        LOG_ERROR("路径遍历被阻止: {} - {}", relativePath, e.what());
         return false;
     }
     fsHelper.EnsureDirectoryExists(targetDir);
@@ -415,12 +414,12 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
             targetFilePath=FileSystemHelper::SecureCombine(targetDir,fileRelativePath);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] 临时文件路径遍历被阻止: "<<e.what()<<std::endl;
+            LOG_ERROR("临时文件路径遍历被阻止: {}", e.what());
             dirSuccess=false;
             continue;
         }
         if(!std::filesystem::exists(tempFilePath)) {
-            g_logger<<"[WARN] 解压文件中不存在: "<<fileRelativePath<<std::endl;
+            LOG_WARN("解压文件中不存在: {}", fileRelativePath);
             dirSuccess=false;
             continue;
         }
@@ -428,12 +427,12 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         if(!expectedHash.empty()) {
             std::string actualHash=FileHasher::CalculateFileHashStream(tempFilePath,hashAlgorithm);
             if(actualHash!=expectedHash) {
-                g_logger<<"[WARN] 解压文件哈希验证失败: "<<fileRelativePath<<std::endl;
-                g_logger<<"[WARN] 期望: "<<expectedHash<<std::endl;
-                g_logger<<"[WARN] 实际: "<<actualHash<<std::endl;
+                LOG_WARN("解压文件哈希验证失败: {}", fileRelativePath);
+                LOG_WARN("期望: {}", expectedHash);
+                LOG_WARN("实际: {}", actualHash);
             }
             else {
-                g_logger<<"[DEBUG] 解压文件哈希验证成功: "<<fileRelativePath<<std::endl;
+                LOG_DEBUG("解压文件哈希验证成功: {}", fileRelativePath);
             }
         }
 
@@ -442,10 +441,10 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         try {
             std::filesystem::copy(tempFilePath,targetFilePath,
                 std::filesystem::copy_options::overwrite_existing);
-            g_logger<<"[INFO] 更新文件: "<<fileRelativePath<<std::endl;
+            LOG_INFO("更新文件: {}", fileRelativePath);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] 文件复制失败: "<<fileRelativePath<<" - "<<e.what()<<std::endl;
+            LOG_ERROR("文件复制失败: {} - {}", fileRelativePath, e.what());
             dirSuccess=false;
         }
     }
@@ -458,7 +457,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
         std::filesystem::remove_all(tempDir);
     }
     catch(const std::exception& e) {
-        g_logger<<"[WARN] 清理临时目录失败: "<<e.what()<<std::endl;
+        LOG_WARN("清理临时目录失败: {}", e.what());
     }
 
     return dirSuccess;
@@ -475,7 +474,7 @@ bool HashBasedFileSyncer::ProcessDeleteList(const Json::Value& deleteList) {
             fullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
         }
         catch(const std::exception& e) {
-            g_logger<<"[ERROR] 删除路径遍历攻击被阻止: "<<e.what()<<std::endl;
+            LOG_ERROR("删除路径遍历攻击被阻止: {}", e.what());
             continue;
         }
 
@@ -483,16 +482,16 @@ bool HashBasedFileSyncer::ProcessDeleteList(const Json::Value& deleteList) {
             if(std::filesystem::exists(fullPath)) {
                 if(std::filesystem::is_directory(fullPath)) {
                     std::filesystem::remove_all(fullPath);
-                    g_logger<<"[INFO] 删除目录: "<<path<<std::endl;
+                    LOG_INFO("删除目录: {}", path);
                 }
                 else {
                     std::filesystem::remove(fullPath);
-                    g_logger<<"[INFO] 删除文件: "<<path<<std::endl;
+                    LOG_INFO("删除文件: {}", path);
                 }
             }
         }
         catch(const std::exception& e) {
-            g_logger<<"[WARN] 删除失败: "<<path<<" - "<<e.what()<<std::endl;
+            LOG_WARN("删除失败: {} - {}", path, e.what());
         }
     }
     return true;

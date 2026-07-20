@@ -46,7 +46,7 @@ std::string HttpClient::Get(const std::string& url) {
     std::string response;
 
     if(!curl) {
-        g_logger<<"[ERROR] CURL初始化失败"<<std::endl;
+		LOG_ERROR("CURL初始化失败");
         return response;
     }
 
@@ -56,7 +56,7 @@ std::string HttpClient::Get(const std::string& url) {
 
     CURLcode res=curl_easy_perform(curl);
     if(res!=CURLE_OK) {
-        g_logger<<"[ERROR] HTTP请求失败: "<<curl_easy_strerror(res)<<std::endl;
+        LOG_ERROR("HTTP请求失败: {}", curl_easy_strerror(res));
         return "";
     }
 
@@ -86,7 +86,7 @@ bool HttpClient::DownloadFileWithProgress(const std::string& url,const std::stri
     errno_t err=fopen_s(&file,outputPath.c_str(),"wb");
 
     if(err!=0||!file) {
-        g_logger<<"[ERROR] 无法创建文件: "<<outputPath<<std::endl;
+        LOG_ERROR("无法创建文件: {}", outputPath);
         return false;
     }
 
@@ -112,11 +112,10 @@ bool HttpClient::DownloadFileWithProgress(const std::string& url,const std::stri
     fclose(file);
 
     if(res!=CURLE_OK) {
-        g_logger<<"[ERROR] 下载失败: "<<curl_easy_strerror(res);
+        LOG_ERROR("下载失败: {}", curl_easy_strerror(res));
         if(res==CURLE_OPERATION_TIMEDOUT) {
-            g_logger<<" (超时)";
+            LOG_ERROR(" (超时)");
         }
-        g_logger<<std::endl;
         std::remove(outputPath.c_str());
         return false;
     }
@@ -163,11 +162,10 @@ bool HttpClient::DownloadToMemoryWithProgress(const std::string& url,std::vector
     }
 
     if(res!=CURLE_OK) {
-        g_logger<<"[ERROR] 下载到内存失败: "<<curl_easy_strerror(res);
+        LOG_ERROR("下载到内存失败: {}", curl_easy_strerror(res));
         if(res==CURLE_OPERATION_TIMEDOUT) {
-            g_logger<<" (超时)";
-        }
-        g_logger<<std::endl;
+            LOG_ERROR(" (超时)");
+        } 
         return false;
     }
     return true;

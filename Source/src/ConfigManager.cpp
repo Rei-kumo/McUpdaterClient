@@ -5,12 +5,12 @@
 
 ConfigManager::ConfigManager(const std::string& configPath):configPath(configPath),configLoaded(false) {
     if(configPath.empty()) {
-        g_logger<<"[ERROR]配置文件路径为空!"<<std::endl;
+		LOG_ERROR("配置文件路径为空!");
         return;
     }
 
     if(!EnsureConfigDirectory()) {
-        g_logger<<"[ERROR]无法创建配置目录"<<std::endl;
+        LOG_ERROR("无法创建配置目录");
         return;
     }
 
@@ -24,13 +24,13 @@ ConfigManager::~ConfigManager() {
 
 bool ConfigManager::LoadConfig() {
     if(configPath.empty()) {
-        g_logger<<"[ERROR]配置文件路径为空"<<std::endl;
+        LOG_ERROR("配置文件路径为空");
         return false;
     }
 
     std::ifstream file(configPath);
     if(!file.is_open()) {
-        g_logger<<"[WARN]无法打开配置文件: "<<configPath<<std::endl;
+        LOG_WARN("无法打开配置文件: {}", configPath);
         return false;
     }
 
@@ -38,7 +38,7 @@ bool ConfigManager::LoadConfig() {
     std::string errors;
 
     if(!Json::parseFromStream(reader,file,&cachedConfig,&errors)) {
-        g_logger<<"[ERROR]配置解析错误: "<<errors<<std::endl;
+        LOG_ERROR("配置解析错误: {}", errors);
         file.close();
         return false;
     }
@@ -192,17 +192,17 @@ bool ConfigManager::ConfigExists(){
 
 bool ConfigManager::InitializeDefaultConfig(){
     if(!EnsureConfigDirectory()){
-        g_logger<<"[ERROR]无法创建配置目录"<<std::endl;
+        LOG_ERROR("无法创建配置目录");
         return false;
     }
 
     Json::Value defaultConfig=CreateDefaultConfig();
     bool result=WriteConfig(defaultConfig);
     if(result){
-        g_logger<<"[信息]已创建默认配置文件:"<<configPath<<std::endl;
+        LOG_INFO("已创建默认配置文件: {}", configPath);
     }
     else{
-        g_logger<<"[ERROR]创建默认配置文件失败"<<std::endl;
+        LOG_ERROR("创建默认配置文件失败");
     }
     return result;
 }
@@ -244,13 +244,13 @@ bool ConfigManager::WriteConfig(const Json::Value& config){
     }
 
     if(configPath.empty()) {
-        g_logger<<"[ERROR]配置文件路径为空"<<std::endl;
+        LOG_ERROR("配置文件路径为空");
         return false;
     }
 
     std::ofstream file(configPath);
     if(!file.is_open()){
-        g_logger<<"[ERROR]无法打开配置文件进行写入: "<<configPath<<std::endl;
+        LOG_ERROR("无法打开配置文件进行写入: {}", configPath);
         return false;
     }
 

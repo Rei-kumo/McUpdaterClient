@@ -44,7 +44,7 @@ bool IncrementalUpdatePlanner::ShouldUseIncrementalUpdate(const std::string& loc
 
     if(!std::regex_match(localVersion,localMatch,versionRegex)||
         !std::regex_match(remoteVersion,remoteMatch,versionRegex)) {
-        g_logger<<"[WARN] 版本号格式不正确，跳过增量更新"<<std::endl;
+		LOG_WARN("版本号格式不正确，跳过增量更新");
         return false;
     }
 
@@ -52,7 +52,7 @@ bool IncrementalUpdatePlanner::ShouldUseIncrementalUpdate(const std::string& loc
     int remoteMajor=std::stoi(remoteMatch[1]);
 
     if(localMajor!=remoteMajor) {
-        g_logger<<"[INFO] 检测到主要版本变更 ("<<localVersion<<" -> "<<remoteVersion<<")，建议使用全量更新"<<std::endl;
+        LOG_INFO("检测到主要版本变更 ({} -> {})，建议使用全量更新", localVersion, remoteVersion);
     }
 
     return true;
@@ -60,7 +60,7 @@ bool IncrementalUpdatePlanner::ShouldUseIncrementalUpdate(const std::string& loc
 std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Json::Value& packages,const std::string& fromVersion,const std::string& toVersion) {
     std::vector<std::string> result;
 
-    g_logger<<"[INFO] 寻找更新路径: "<<fromVersion<<" -> "<<toVersion<<std::endl;
+    LOG_INFO("寻找更新路径: {} -> {}", fromVersion, toVersion);
 
     for(const auto& package:packages) {
         if(!package.isMember("from_version")||!package.isMember("to_version")||!package.isMember("archive")) {
@@ -72,7 +72,7 @@ std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Js
         std::string archive=package["archive"].asString();
 
         if(from==fromVersion&&to==toVersion) {
-            g_logger<<"[INFO] 找到直接合并包: "<<archive<<" ("<<from<<" -> "<<to<<")"<<std::endl;
+            LOG_INFO("找到直接合并包: {} ({} -> {})", archive, from, to);
             return {archive};
         }
     }
@@ -87,7 +87,7 @@ std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Js
         std::string archive=package["archive"].asString();
 
         if(from=="0.0.0"&&to==toVersion) {
-            g_logger<<"[INFO] 找到全量更新包: "<<archive<<" (0.0.0 -> "<<to<<")"<<std::endl;
+            LOG_INFO("找到全量更新包: {} (0.0.0 -> {})", archive, to);
             return {archive};
         }
     }
@@ -135,7 +135,7 @@ std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Js
                 }
             }
 
-            g_logger<<"[INFO] 找到增量更新路径，包含 "<<archivePath.size()<<" 个包"<<std::endl;
+            LOG_INFO("找到增量更新路径，包含 {} 个包", archivePath.size());
             return archivePath;
         }
 
@@ -151,7 +151,7 @@ std::vector<std::string> IncrementalUpdatePlanner::GetUpdatePackagePath(const Js
         }
     }
 
-    g_logger<<"[WARN] 无法找到增量更新路径: "<<fromVersion<<" -> "<<toVersion<<std::endl;
+	LOG_WARN("无法找到增量更新路径: {} -> {}",fromVersion,toVersion);
     return {};
 }
 bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateInfo,const std::string& localVersion,const std::string& remoteVersion) {
@@ -159,24 +159,24 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
 
     const Json::Value& packages=updateInfo["incremental_packages"];
     if(!packages.isArray()||packages.size()==0) {
-        g_logger<<"[INFO] 没有可用的增量更新包"<<std::endl;
+        LOG_INFO("没有可用的增量更新包");
         return false;
     }
 
-    g_logger<<"[INFO] 开始处理增量更新: "<<localVersion<<" -> "<<remoteVersion<<std::endl;
+    LOG_INFO("开始处理增量更新: {} -> {}", localVersion, remoteVersion);
 
     std::vector<std::string> packagePaths=GetUpdatePackagePath(packages,localVersion,remoteVersion);
 
     if(packagePaths.empty()) {
-        g_logger<<"[INFO] 没有找到合适的增量更新包路径"<<std::endl;
+        LOG_INFO("没有找到合适的增量更新包路径");
         return false;
     }
 
-    g_logger<<"[INFO] 需要应用 "<<packagePaths.size()<<" 个更新包"<<std::endl;
+    LOG_INFO("需要应用 {} 个更新包", packagePaths.size());
 
     for(size_t i=0; i<packagePaths.size(); i++) {
         const std::string& packagePath=packagePaths[i];
-        g_logger<<"[INFO] ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理更新包: "<<packagePath<<std::endl;
+        LOG_INFO("[INFO] ({}/{}) 处理更新包: {}", (i+1), packagePaths.size(), packagePath);
 
         if(i>0) {
             updateOrchestrator.OptimizeMemoryUsage();
@@ -191,7 +191,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
         }
 
         if(packageInfo.isNull()) {
-            g_logger<<"[ERROR] 找不到包信息: "<<packagePath<<std::endl;
+            LOG_ERROR("找不到包信息: {}", packagePath);
             continue;
         }
 
@@ -203,7 +203,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
         std::string tempDir=std::filesystem::temp_directory_path().string();
         std::string tempZip=tempDir+"/mc_pkg_"+std::to_string(pid)+"_"+std::to_string(timestamp)+"_"+std::to_string(i)+".zip";
 
-        g_logger<<"[INFO] 开始下载更新包..."<<std::endl;
+        LOG_INFO("开始下载更新包...");
         std::string progressMessage="下载更新包 "+std::to_string(i+1)+"/"+std::to_string(packagePaths.size());
         progressReporter.ShowProgressBar(progressMessage,0,1);
 
@@ -222,62 +222,62 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
         progressReporter.ClearProgressLine();
 
         if(!downloadSuccess) {
-            g_logger<<"[ERROR] 下载更新包失败: "<<packagePath<<std::endl;
+            LOG_ERROR("下载更新包失败: {}", packagePath);
             return false;
         }
 
-        g_logger<<"[INFO] 下载完成"<<std::endl;
+        LOG_INFO("下载完成");
 
         if(expectedSize>0) {
             std::error_code ec;
             auto actualSize=std::filesystem::file_size(tempZip,ec);
             if(!ec&&actualSize!=expectedSize) {
-                g_logger<<"[WARN] 文件大小不匹配: 期望 "<<progressReporter.FormatBytes(expectedSize)<<", 实际 "<<progressReporter.FormatBytes(actualSize)<<std::endl;
+                LOG_WARN("文件大小不匹配: 期望 {}, 实际 {}", progressReporter.FormatBytes(expectedSize), progressReporter.FormatBytes(actualSize));
             }
         }
 
         if(!expectedHash.empty()) {
-            g_logger<<"[INFO] 验证文件哈希..."<<std::endl;
+            LOG_INFO("验证文件哈希...");
 
             std::string actualHash=FileHasher::CalculateFileHashStream(tempZip,"md5");
             if(actualHash!=expectedHash) {
-                g_logger<<"[ERROR] 更新包哈希验证失败"<<std::endl;
-                g_logger<<"[ERROR] 期望: "<<expectedHash<<std::endl;
-                g_logger<<"[ERROR] 实际: "<<actualHash<<std::endl;
+                LOG_ERROR("更新包哈希验证失败");
+                LOG_ERROR("期望: {}", expectedHash);
+                LOG_ERROR("实际: {}", actualHash);
 
                 std::filesystem::remove(tempZip);
                 return false;
             }
             else {
-                g_logger<<"[INFO] 更新包哈希验证通过"<<std::endl;
+                LOG_INFO("更新包哈希验证通过");
             }
         }
 
         std::string tempExtractDir=tempDir+"/mc_extract_"+std::to_string(pid)+"_"+std::to_string(timestamp)+"_"+std::to_string(i);
         fsHelper.EnsureDirectoryExists(tempExtractDir);
 
-        g_logger<<"[INFO] 解压更新包..."<<std::endl;
+		LOG_INFO("解压更新包...");
         if(!zipExtractor.ExtractZipFromFile(tempZip,tempExtractDir)) {
-            g_logger<<"[ERROR] 解压更新包失败: "<<packagePath<<std::endl;
+            LOG_ERROR("解压更新包失败: {}", packagePath);
             std::filesystem::remove_all(tempExtractDir);
             std::filesystem::remove(tempZip);
             return false;
         }
 
-        g_logger<<"[INFO] 应用更新..."<<std::endl;
+        LOG_INFO("应用更新...");
         std::string manifestPath=tempExtractDir+"/update_manifest.txt";
         if(std::filesystem::exists(manifestPath)) {
             if(!ApplyUpdateFromManifest(manifestPath,tempExtractDir)) {
-                g_logger<<"[ERROR] 应用清单更新失败"<<std::endl;
+                LOG_ERROR("应用清单更新失败");
                 std::filesystem::remove_all(tempExtractDir);
                 std::filesystem::remove(tempZip);
                 return false;
             }
         }
         else {
-            g_logger<<"[WARN] 未找到清单文件，使用传统文件复制方式"<<std::endl;
+            LOG_WARN("未找到清单文件，使用传统文件复制方式");
             if(!ApplyUpdateFromDirectory(tempExtractDir)) {
-                g_logger<<"[ERROR] 应用更新失败"<<std::endl;
+                LOG_ERROR("应用更新失败");
                 std::filesystem::remove_all(tempExtractDir);
                 std::filesystem::remove(tempZip);
                 return false;
@@ -287,19 +287,19 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
         std::filesystem::remove_all(tempExtractDir);
         std::filesystem::remove(tempZip);
 
-        g_logger<<"[INFO] 更新包 ("<<(i+1)<<"/"<<packagePaths.size()<<") 处理完成"<<std::endl;
+        LOG_INFO("更新包 ({}/{}) 处理完成", (i+1), packagePaths.size());
 
         updateOrchestrator.OptimizeMemoryUsage();
     }
 
-    g_logger<<"[INFO] 所有增量更新包应用完成"<<std::endl;
+    LOG_INFO("所有增量更新包应用完成");
 
     return true;
 }
 bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manifestPath,const std::string& tempDir) {
     std::ifstream manifestFile(manifestPath);
     if(!manifestFile.is_open()) {
-        g_logger<<"[ERROR] 无法打开清单文件: "<<manifestPath<<std::endl;
+		LOG_ERROR("无法打开清单文件: {}",manifestPath);
         return false;
     }
 
@@ -320,7 +320,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
             tokens.push_back(token);
         }
         if(tokens.size()<2) {
-            g_logger<<"[WARN] 忽略无效行: "<<line<<std::endl;
+            LOG_WARN("忽略无效行: {}", line);
             continue;
         }
 
@@ -339,7 +339,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 targetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 failCount++;
                 continue;
             }
@@ -351,18 +351,16 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 std::filesystem::copy_file(sourceFile,targetFile,
                     std::filesystem::copy_options::overwrite_existing,ec);
                 if(ec) {
-                    g_logger<<"[ERROR] 复制文件失败: "<<sourceFile<<" -> "<<targetFile
-                        <<" - "<<ec.message()<<std::endl;
+					LOG_ERROR("复制文件失败: {} -> {} - {}",sourceFile,targetFile,ec.message());
                     failCount++;
                 }
                 else {
-                    g_logger<<"[INFO] "<<(type=="A"?"新增":"修改")
-                        <<"文件: "<<path<<std::endl;
+					LOG_INFO("{}文件: {}",(type=="A"?"新增":"修改"),path);
                     successCount++;
                 }
             }
             else {
-                g_logger<<"[WARN] 源文件不存在: "<<sourceFile<<std::endl;
+                LOG_WARN("源文件不存在: {}", sourceFile);
                 failCount++;
             }
         }
@@ -373,24 +371,23 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 targetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 failCount++;
                 continue;
             }
             if(std::filesystem::exists(targetFile)) {
                 try {
                     std::filesystem::remove(targetFile);
-                    g_logger<<"[INFO] 删除文件: "<<path<<std::endl;
+                    LOG_INFO("删除文件: {}", path);
                     successCount++;
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 删除文件失败: "<<targetFile
-                        <<" - "<<e.what()<<std::endl;
+                    LOG_ERROR("删除文件失败: {} - {}", targetFile, e.what());
                     failCount++;
                 }
             }
             else {
-                g_logger<<"[DEBUG] 文件不存在，无需删除: "<<path<<std::endl;
+                LOG_DEBUG("文件不存在，无需删除: {}", path);
                 // 不存在也算成功
                 successCount++;
             }
@@ -398,7 +395,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
         else if(type=="R") {
             // 移动/重命名文件
             if(oldPath.empty()) {
-                g_logger<<"[ERROR] 移动操作缺少 old_path: "<<line<<std::endl;
+				LOG_ERROR("移动操作缺少 old_path: {}",line);
                 failCount++;
                 continue;
             }
@@ -409,7 +406,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 oldTargetFile=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),oldPath);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 failCount++;
                 continue;
             }
@@ -420,17 +417,16 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 try {
                     std::filesystem::copy_file(sourceFile,targetFile,
                         std::filesystem::copy_options::overwrite_existing);
-                    g_logger<<"[INFO] 移动文件: "<<oldPath<<" -> "<<path<<std::endl;
+                    LOG_INFO("移动文件: {} -> {}", oldPath, path);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 复制文件失败 (移动操作): "<<sourceFile
-                        <<" -> "<<targetFile<<" - "<<e.what()<<std::endl;
+                    LOG_ERROR("复制文件失败 (移动操作): {} -> {} - {}", sourceFile, targetFile, e.what());
                     failCount++;
                     continue;
                 }
             }
             else {
-                g_logger<<"[ERROR] 移动操作的源文件不存在: "<<sourceFile<<std::endl;
+                LOG_ERROR("移动操作的源文件不存在: {}", sourceFile);
                 failCount++;
                 continue;
             }
@@ -441,8 +437,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                     std::filesystem::remove(oldTargetFile);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[WARN] 移动后删除旧文件失败: "<<oldTargetFile
-                        <<" - "<<e.what()<<std::endl;
+					LOG_WARN("移动后删除旧文件失败: {} - {}",oldTargetFile,e.what());
                     // 不标记为失败，因为新文件已复制
                 }
             }
@@ -454,23 +449,22 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 failCount++;
                 continue;
             }
             try {
                 if(!std::filesystem::exists(targetDir)) {
                     std::filesystem::create_directories(targetDir);
-                    g_logger<<"[INFO] 创建空目录: "<<path<<std::endl;
+                    LOG_INFO("创建空目录: {}", path);
                 }
                 else {
-                    g_logger<<"[DEBUG] 目录已存在: "<<path<<std::endl;
+                    LOG_DEBUG("目录已存在: {}", path);
                 }
                 successCount++;
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 创建目录失败: "<<targetDir
-                    <<" - "<<e.what()<<std::endl;
+				LOG_ERROR("创建目录失败: {} - {}",targetDir,e.what());
                 failCount++;
             }
         }
@@ -481,7 +475,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 targetDir=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),path);
             }
             catch(const std::exception& e) {
-                g_logger<<"[ERROR] 路径遍历被阻止: "<<e.what()<<std::endl;
+                LOG_ERROR("路径遍历被阻止: {}", e.what());
                 failCount++;
                 continue;
             }
@@ -489,22 +483,21 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 try {
                     // 仅删除空目录（如果目录非空，可能因为文件残留而失败）
                     std::filesystem::remove(targetDir);
-                    g_logger<<"[INFO] 删除空目录: "<<path<<std::endl;
+					LOG_INFO("删除空目录: {}",path);
                     successCount++;
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[WARN] 删除目录失败 (可能非空): "<<targetDir
-                        <<" - "<<e.what()<<std::endl;
+					LOG_WARN("删除目录失败 (可能非空): {} - {}",targetDir,e.what());  
                     failCount++;
                 }
             }
             else {
-                g_logger<<"[DEBUG] 目录不存在或非目录，无需删除: "<<path<<std::endl;
+                LOG_DEBUG("目录不存在或非目录，无需删除: {}", path);
                 successCount++;
             }
         }
         else {
-            g_logger<<"[WARN] 未知操作类型: "<<type<<" (行: "<<line<<")"<<std::endl;
+            LOG_WARN("未知操作类型: {} (行: {})", type, line);
             failCount++;
         }
 
@@ -519,8 +512,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
     std::cout<<"\r清单处理完成: 总计 "<<operationCount<<" 项操作, 成功: "<<successCount
         <<", 失败: "<<failCount<<"                    "<<std::endl;
 
-    g_logger<<"[INFO] 从清单执行了 "<<operationCount<<" 项操作, 成功: "<<successCount
-        <<", 失败: "<<failCount<<std::endl;
+    LOG_INFO("从清单执行了 {} 项操作, 成功: {}, 失败: {}", operationCount, successCount, failCount);
 
     return failCount==0;
 }
@@ -534,7 +526,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
         std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
 
         if(wideSourceDir.empty()||wideGameDir.empty()) {
-            g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;
+			LOG_ERROR("无法转换路径为宽字符");
             return false;
         }
 
@@ -546,8 +538,7 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
                     wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 路径遍历被阻止: "
-                        <<FileSystemHelper::WideToUtf8(wideRelativePath)<<" - "<<e.what()<<std::endl;
+					LOG_ERROR("路径遍历被阻止: {} - {}",FileSystemHelper::WideToUtf8(wideRelativePath),e.what());
                     failedCount++;
                     continue;
                 }
@@ -570,23 +561,23 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
                 }
                 else {
                     failedCount++;
-                    g_logger<<"[WARN] 文件复制失败: "<<fsHelper.WideToUtf8(entry.path().wstring())<<std::endl;
+                    LOG_WARN("文件复制失败: {}", fsHelper.WideToUtf8(entry.path().wstring()));
                 }
             }
         }
 
         std::cout<<"\r应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
-        g_logger<<"[INFO] 应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<std::endl;
+        LOG_INFO("应用更新完成: {} 个文件已处理，失败: {}", fileCount, failedCount);
 
         if(failedCount>0) {
-            g_logger<<"[WARN] "<<failedCount<<" 个文件处理失败"<<std::endl;
+            LOG_WARN("{} 个文件处理失败", failedCount);
             return false;
         }
 
         return true;
     }
     catch(const std::exception& e) {
-        g_logger<<"[ERROR] 应用更新失败: "<<e.what()<<std::endl;
+        LOG_ERROR("应用更新失败: {}", e.what());
         return false;
     }
 }
@@ -598,7 +589,7 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
     std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
 
     if(wideTempDir.empty()||wideGameDir.empty()) {
-        g_logger<<"[ERROR] 无法转换路径为宽字符"<<std::endl;
+        LOG_ERROR("无法转换路径为宽字符");
         return false;
     }
 
@@ -611,8 +602,7 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
                     wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
                 }
                 catch(const std::exception& e) {
-                    g_logger<<"[ERROR] 路径遍历被阻止: "
-                        <<FileSystemHelper::WideToUtf8(wideRelativePath)<<" - "<<e.what()<<std::endl;
+					LOG_ERROR("路径遍历被阻止: {} - {}",FileSystemHelper::WideToUtf8(wideRelativePath),e.what());
                     failedCount++;
                     continue;
                 }
@@ -636,12 +626,12 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
         }
     }
     catch(const std::exception& e) {
-        g_logger<<"[ERROR] 遍历临时目录失败: "<<e.what()<<std::endl;
+        LOG_ERROR("遍历临时目录失败: {}", e.what());
         return false;
     }
 
     std::cout<<"\r更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
-    g_logger<<"[INFO] 更新了 "<<fileCount<<" 个文件，失败: "<<failedCount<<std::endl;
+    LOG_INFO("更新了 {} 个文件，失败: {}", fileCount, failedCount);
 
     return fileCount>0&&failedCount==0;
 }

@@ -11,6 +11,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     add_compile_options(/MT$<$<CONFIG:Debug>:d>)
+    add_compile_options(/utf-8) 
 endif()
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/Source/src)
@@ -86,14 +87,21 @@ add_executable(McUpdaterClient
     ${SOURCE_DIR}/ConfigManager.cpp
     ${SOURCE_DIR}/HttpClient.cpp
     ${SOURCE_DIR}/FileHasher.cpp
-    ${SOURCE_DIR}/logger.cpp
+    
     ${SOURCE_DIR}/SelfUpdater.cpp 
     ${SOURCE_DIR}/FileSystemHelper.cpp
     ${SOURCE_DIR}/ZipExtractor.cpp 
     ${SOURCE_DIR}/HashBasedFileSyncer.cpp
     ${SOURCE_DIR}/IncrementalUpdatePlanner.cpp
     ${SOURCE_DIR}/ProgressReporter.cpp
-    ${SOURCE_DIR}/UpdateOrchestrator.cpp "Source/include/VersionCompare.h")
+    ${SOURCE_DIR}/UpdateOrchestrator.cpp "Source/include/VersionCompare.h" )
+
+target_include_directories(McUpdaterClient PRIVATE
+    ${CMAKE_SOURCE_DIR}/Source/thirdparty/fmt
+)
+target_compile_definitions(McUpdaterClient PRIVATE
+    FMT_HEADER_ONLY
+)
 
 target_link_libraries(McUpdaterClient
     ${CURL_LIBRARIES}
