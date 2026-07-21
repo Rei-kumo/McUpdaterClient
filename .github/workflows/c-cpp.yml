@@ -11,108 +11,78 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Cache vcpkg
-      uses: actions/cache@v3
-      with:
-        path: vcpkg
-        key: vcpkg-windows-static-${{ runner.os }}-${{ github.sha }}
-        restore-keys: |
-          vcpkg-windows-static-${{ runner.os }}-
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
 
-    - name: Setup vcpkg
-      run: |
-        if (!(Test-Path "vcpkg/vcpkg.exe")) {
-          git clone https://github.com/Microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat -disableMetrics
-          cd ..
-        }
-        
-    - name: Install dependencies
-      run: |
-        vcpkg/vcpkg integrate install
-        vcpkg/vcpkg install --triplet x64-windows-static curl openssl jsoncpp libzip bzip2 zlib zstd
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg/installed
+          key: vcpkg-windows-static-${{ runner.os }}-v1
+          restore-keys: |
+            vcpkg-windows-static-${{ runner.os }}-
 
-    - name: Configure and build
-      run: |
-        mkdir build
-        cd build
-        cmake .. -G "Ninja" `
-          -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-          -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-          -DCMAKE_BUILD_TYPE=Release
-        cmake --build . --config Release --target McUpdaterClient
-
-    - name: Find and copy executable
-      run: |
-        echo "=== Searching for executable ==="
-        
-        $exePath = ""
-        if (Test-Path "build/Release/McUpdaterClient.exe") {
-          $exePath = "build/Release/McUpdaterClient.exe"
-        } elseif (Test-Path "build/bin/Release/McUpdaterClient.exe") {
-          $exePath = "build/bin/Release/McUpdaterClient.exe"
-        } elseif (Test-Path "build/McUpdaterClient.exe") {
-          $exePath = "build/McUpdaterClient.exe"
-        } else {
-          $exe = Get-ChildItem -Recurse -Path "build" -Filter "McUpdaterClient.exe" | Select-Object -First 1
-          if ($exe) {
-            $exePath = $exe.FullName
+      - name: Setup vcpkg
+        run: |
+          if (!(Test-Path "vcpkg/vcpkg.exe")) {
+            git clone https://github.com/Microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
           }
-        }
-        
-        if ($exePath) {
-          echo "Found at $exePath"
-          Copy-Item $exePath "McUpdaterClient.exe"
-        } else {
-          echo "Executable not found"
-          echo "All files in build directory:"
-          Get-ChildItem -Recurse -Path "build"
-          exit 1
-        }
 
-    - name: Verify file exists
-      run: |
-        if (Test-Path "McUpdaterClient.exe") {
-          echo "=== Executable verification ==="
-          $file = Get-Item "McUpdaterClient.exe"
-          echo "File: $($file.Name)"
-          echo "Size: $($file.Length) bytes"
-          echo "Path: $($file.FullName)"
-          echo "✅ Executable successfully created"
-        } else {
-          echo "❌ Executable not found"
-          exit 1
-        }
+      - name: Install dependencies
+        run: |
+          vcpkg/vcpkg install --triplet x64-windows-static curl openssl jsoncpp libzip bzip2 zlib zstd
 
-    - name: Upload binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: mc-updater-client-windows-static
-        path: McUpdaterClient.exe
+      - name: Configure and build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "Ninja" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release --target McUpdaterClient
+
+      - name: Find and copy executable
+        run: |
+          $exePath = Get-ChildItem -Recurse -Path build -Filter McUpdaterClient.exe | Select-Object -First 1
+          if (-not $exePath) {
+            Write-Host "Executable not found, listing build directory:"
+            Get-ChildItem -Recurse -Path build
+            exit 1
+          }
+          Write-Host "Found: $($exePath.FullName)"
+          Copy-Item $exePath.FullName McUpdaterClient.exe
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mc-updater-client-windows-static
+          path: McUpdaterClient.exe
 
   create-release:
     needs: build-windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
-    steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: mc-updater-client-windows-static
-        path: ./release
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ./release/McUpdaterClient.exe
-        generate_release_notes: true
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mc-updater-client-windows-static
+          path: ./release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./release/McUpdaterClient.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
