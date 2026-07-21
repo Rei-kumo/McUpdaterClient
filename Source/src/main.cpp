@@ -3,6 +3,11 @@
 #include "ConfigManager.h"
 #include "UpdateOrchestrator.h"
 #include "logger.h"
+struct LoggerGuard {
+    ~LoggerGuard() {
+        Logger::Instance().Shutdown();
+    }
+};
 int main(int argc,char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     if(argc==4&&strcmp(argv[1],"--elevated-replace")==0) {
@@ -89,6 +94,7 @@ int main(int argc,char* argv[]) {
     else {
         LOG_INFO("日志文件: {}",logFile);
     }
+    LoggerGuard guard;
 
     std::string apiUrl=configManager.ReadUpdateUrl();
     std::string gameDir=configManager.ReadGameDirectory();
