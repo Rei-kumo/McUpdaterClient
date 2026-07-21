@@ -488,10 +488,10 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
 
             std::string progressMessage="下载 "+path;
             if(expectedSize>0) {
-                progressReporter.ShowProgressBar(progressMessage,0,expectedSize);
+                progressReporter.show(progressMessage,0,expectedSize);
             }
             else {
-                progressReporter.ShowProgressBar(progressMessage,0,1);
+                progressReporter.show(progressMessage,0,1);
             }
 
             if(!httpClient.DownloadFileWithProgress(url,fullPath,
@@ -499,16 +499,16 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                     if(total<=0&&expectedSize>0) {
                         total=expectedSize;
                     }
-                    progressReporter.ShowProgressBar(progressMessage,downloaded,total);
+                    progressReporter.show(progressMessage,downloaded,total);
                 },nullptr)) {
 
-                progressReporter.ClearProgressLine();
+                progressReporter.clear();
                 LOG_ERROR("错误: 文件下载失败: {}", path);
                 if(forceSync) return false;
                 allSuccess=false;
             }
             else {
-                progressReporter.ClearProgressLine();
+                progressReporter.clear();
                 LOG_INFO("文件下载成功: {}", path);
             }
         }

@@ -2,17 +2,20 @@
 #define PROGRESSREPORTER_H
 
 #include <string>
+#include <chrono>
 #include <mutex>
 
 class ProgressReporter {
 public:
-    void ShowProgressBar(const std::string& operation,long long current,long long total);
-    void ClearProgressLine();
-    std::string FormatBytes(long long bytes);
-    static void DownloadProgressCallback(long long downloaded,long long total,void* userdata);
-
+    void show(const std::string& operation,long long current,long long total);
+    void clear();    
+    static std::string FormatBytes(long long bytes);
 private:
-    std::mutex progressMutex;
+    std::mutex mtx_;
+    std::chrono::steady_clock::time_point lastUpdate_{};
+    long long lastCurrent_=-1;
+    static constexpr int BAR_WIDTH=40;
+
 };
 
 #endif

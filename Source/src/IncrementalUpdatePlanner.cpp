@@ -205,7 +205,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
 
         LOG_INFO("开始下载更新包...");
         std::string progressMessage="下载更新包 "+std::to_string(i+1)+"/"+std::to_string(packagePaths.size());
-        progressReporter.ShowProgressBar(progressMessage,0,1);
+        progressReporter.show(progressMessage,0,1);
 
         bool downloadSuccess=httpClient.DownloadFileWithProgress(
             packagePath,
@@ -214,12 +214,12 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
                 if(total<=0&&expectedSize>0) {
                     total=expectedSize;
                 }
-                progressReporter.ShowProgressBar(progressMessage,downloaded,total);
+                progressReporter.show(progressMessage,downloaded,total);
             },
             nullptr
         );
 
-        progressReporter.ClearProgressLine();
+        progressReporter.clear();
 
         if(!downloadSuccess) {
             LOG_ERROR("下载更新包失败: {}", packagePath);

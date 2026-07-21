@@ -94,7 +94,7 @@ add_executable(McUpdaterClient
     ${SOURCE_DIR}/HashBasedFileSyncer.cpp
     ${SOURCE_DIR}/IncrementalUpdatePlanner.cpp
     ${SOURCE_DIR}/ProgressReporter.cpp
-    ${SOURCE_DIR}/UpdateOrchestrator.cpp "Source/include/VersionCompare.h" )
+    ${SOURCE_DIR}/UpdateOrchestrator.cpp "Source/include/VersionCompare.h"  )
 
 target_include_directories(McUpdaterClient PRIVATE
     ${CMAKE_SOURCE_DIR}/Source/thirdparty/fmt

@@ -298,7 +298,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
 
         std::string progressMessage="进度";
 
-        progressReporter.ShowProgressBar(progressMessage,0,1);
+        progressReporter.show(progressMessage,0,1);
 
         bool downloadSuccess=false;
         long long fileSize=0;
@@ -309,10 +309,10 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
 
         auto progressCallback=[this,progressMessage,fileSize](long long downloaded,long long total,void* userdata) {
             if(total<=0&&fileSize>0) {
-                progressReporter.ShowProgressBar(progressMessage,downloaded,fileSize);
+                progressReporter.show(progressMessage,downloaded,fileSize);
             }
             else {
-                progressReporter.ShowProgressBar(progressMessage,downloaded,total);
+                progressReporter.show(progressMessage,downloaded,total);
             }
             };
 
@@ -328,7 +328,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
             nullptr
         );
 
-        progressReporter.ClearProgressLine();
+        progressReporter.clear();
 
         httpClient.SetDownloadTimeout(0);
 

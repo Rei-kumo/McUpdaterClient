@@ -425,18 +425,18 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
         ("minecraft_update_"+std::to_string(pid)+"_"+std::to_string(timestamp)+".zip")).string();
 
     std::string progressMessage="下载 "+relativePath;
-    pRepoter.ShowProgressBar(progressMessage,0,1);
+    pRepoter.show(progressMessage,0,1);
 
     bool downloadSuccess=httpClient.DownloadFileWithProgress(
         url,
         tempZip,
         [this,progressMessage](long long downloaded,long long total,void* userdata) {
-            pRepoter.ShowProgressBar(progressMessage,downloaded,total);
+            pRepoter.show(progressMessage,downloaded,total);
         },
         nullptr
     );
 
-    pRepoter.ClearProgressLine();
+    pRepoter.clear();
 
     if(!downloadSuccess) {
         LOG_ERROR("下载失败: {}", url);
