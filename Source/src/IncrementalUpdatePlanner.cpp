@@ -230,7 +230,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
 
         if(expectedSize>0) {
             std::error_code ec;
-            auto actualSize=std::filesystem::file_size(tempZip,ec);
+            auto actualSize=std::filesystem::file_size(std::filesystem::u8path(tempZip),ec);
             if(!ec&&actualSize!=expectedSize) {
                 LOG_WARN("文件大小不匹配: 期望 {}, 实际 {}", progressReporter.FormatBytes(expectedSize), progressReporter.FormatBytes(actualSize));
             }
@@ -245,7 +245,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
                 LOG_ERROR("期望: {}", expectedHash);
                 LOG_ERROR("实际: {}", actualHash);
 
-                std::filesystem::remove(tempZip);
+                std::filesystem::remove(std::filesystem::u8path(tempZip));
                 return false;
             }
             else {
@@ -259,18 +259,18 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
 		LOG_INFO("解压更新包...");
         if(!zipExtractor.ExtractZipFromFile(tempZip,tempExtractDir)) {
             LOG_ERROR("解压更新包失败: {}", packagePath);
-            std::filesystem::remove_all(tempExtractDir);
-            std::filesystem::remove(tempZip);
+            std::filesystem::remove_all(std::filesystem::u8path(tempExtractDir));
+            std::filesystem::remove(std::filesystem::u8path(tempZip));
             return false;
         }
 
         LOG_INFO("应用更新...");
         std::string manifestPath=tempExtractDir+"/update_manifest.txt";
-        if(std::filesystem::exists(manifestPath)) {
+        if(std::filesystem::exists(std::filesystem::u8path(manifestPath))) {
             if(!ApplyUpdateFromManifest(manifestPath,tempExtractDir)) {
                 LOG_ERROR("应用清单更新失败");
-                std::filesystem::remove_all(tempExtractDir);
-                std::filesystem::remove(tempZip);
+                std::filesystem::remove_all(std::filesystem::u8path(tempExtractDir));
+                std::filesystem::remove(std::filesystem::u8path(tempZip));
                 return false;
             }
         }
@@ -278,14 +278,14 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
             LOG_WARN("未找到清单文件，使用传统文件复制方式");
             if(!ApplyUpdateFromDirectory(tempExtractDir)) {
                 LOG_ERROR("应用更新失败");
-                std::filesystem::remove_all(tempExtractDir);
-                std::filesystem::remove(tempZip);
+                std::filesystem::remove_all(std::filesystem::u8path(tempExtractDir));
+                std::filesystem::remove(std::filesystem::u8path(tempZip));
                 return false;
             }
         }
 
-        std::filesystem::remove_all(tempExtractDir);
-        std::filesystem::remove(tempZip);
+        std::filesystem::remove_all(std::filesystem::u8path(tempExtractDir));
+        std::filesystem::remove(std::filesystem::u8path(tempZip));
 
         LOG_INFO("更新包 ({}/{}) 处理完成", (i+1), packagePaths.size());
 
@@ -297,7 +297,7 @@ bool IncrementalUpdatePlanner::ApplyIncrementalUpdate(const Json::Value& updateI
     return true;
 }
 bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manifestPath,const std::string& tempDir) {
-    std::ifstream manifestFile(manifestPath);
+    std::ifstream manifestFile(std::filesystem::u8path(manifestPath));
     if(!manifestFile.is_open()) {
 		LOG_ERROR("无法打开清单文件: {}",manifestPath);
         return false;
@@ -344,11 +344,11 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 continue;
             }
 
-            fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
+            fsHelper.EnsureDirectoryExists(std::filesystem::u8path(targetFile).parent_path().generic_u8string());
 
-            if(std::filesystem::exists(sourceFile)) {
+            if(std::filesystem::exists(std::filesystem::u8path(sourceFile))) {
                 std::error_code ec;
-                std::filesystem::copy_file(sourceFile,targetFile,
+                std::filesystem::copy_file(std::filesystem::u8path(sourceFile),std::filesystem::u8path(targetFile),
                     std::filesystem::copy_options::overwrite_existing,ec);
                 if(ec) {
 					LOG_ERROR("复制文件失败: {} -> {} - {}",sourceFile,targetFile,ec.message());
@@ -375,9 +375,9 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 failCount++;
                 continue;
             }
-            if(std::filesystem::exists(targetFile)) {
+            if(std::filesystem::exists(std::filesystem::u8path(targetFile))) {
                 try {
-                    std::filesystem::remove(targetFile);
+                    std::filesystem::remove(std::filesystem::u8path(targetFile));
                     LOG_INFO("删除文件: {}", path);
                     successCount++;
                 }
@@ -411,12 +411,11 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 continue;
             }
 
-            fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFile).parent_path().string());
+            fsHelper.EnsureDirectoryExists(std::filesystem::u8path(targetFile).parent_path().generic_u8string());
 
-            if(std::filesystem::exists(sourceFile)) {
+            if(std::filesystem::exists(std::filesystem::u8path(sourceFile))) {
                 try {
-                    std::filesystem::copy_file(sourceFile,targetFile,
-                        std::filesystem::copy_options::overwrite_existing);
+                    std::filesystem::copy_file(std::filesystem::u8path(sourceFile),std::filesystem::u8path(targetFile),std::filesystem::copy_options::overwrite_existing);
                     LOG_INFO("移动文件: {} -> {}", oldPath, path);
                 }
                 catch(const std::exception& e) {
@@ -432,9 +431,9 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
             }
 
             // 删除旧文件
-            if(std::filesystem::exists(oldTargetFile)) {
+            if(std::filesystem::exists(std::filesystem::u8path(oldTargetFile))) {
                 try {
-                    std::filesystem::remove(oldTargetFile);
+                    std::filesystem::remove(std::filesystem::u8path(oldTargetFile));
                 }
                 catch(const std::exception& e) {
 					LOG_WARN("移动后删除旧文件失败: {} - {}",oldTargetFile,e.what());
@@ -454,8 +453,8 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 continue;
             }
             try {
-                if(!std::filesystem::exists(targetDir)) {
-                    std::filesystem::create_directories(targetDir);
+                if(!std::filesystem::exists(std::filesystem::u8path(targetDir))) {
+                    std::filesystem::create_directories(std::filesystem::u8path(targetDir));
                     LOG_INFO("创建空目录: {}", path);
                 }
                 else {
@@ -479,10 +478,11 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromManifest(const std::string& manife
                 failCount++;
                 continue;
             }
-            if(std::filesystem::exists(targetDir)&&std::filesystem::is_directory(targetDir)) {
+            auto targetDirPath=std::filesystem::u8path(targetDir);
+            if(std::filesystem::exists(targetDirPath)&&std::filesystem::is_directory(targetDirPath)) {
                 try {
                     // 仅删除空目录（如果目录非空，可能因为文件残留而失败）
-                    std::filesystem::remove(targetDir);
+                    std::filesystem::remove(targetDirPath);
 					LOG_INFO("删除空目录: {}",path);
                     successCount++;
                 }
@@ -522,62 +522,75 @@ bool IncrementalUpdatePlanner::ApplyUpdateFromDirectory(const std::string& sourc
     const int BATCH_SIZE=50;
 
     try {
-        std::wstring wideSourceDir=fsHelper.Utf8ToWide(sourceDir);
-        std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
+        const std::string gameDir=updateOrchestrator.GetGameDirectory();
+        std::filesystem::path sourcePath=std::filesystem::u8path(sourceDir);
 
-        if(wideSourceDir.empty()||wideGameDir.empty()) {
-			LOG_ERROR("无法转换路径为宽字符");
-            return false;
-        }
-
-        for(const auto& entry:std::filesystem::recursive_directory_iterator(wideSourceDir)) {
+        for(const auto& entry:
+            std::filesystem::recursive_directory_iterator(sourcePath)) {
             if(entry.is_regular_file()) {
-                std::wstring wideRelativePath=entry.path().wstring().substr(wideSourceDir.size()+1);
-                std::wstring wideTargetPath;
-                try {
-                    wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
-                }
-                catch(const std::exception& e) {
-					LOG_ERROR("路径遍历被阻止: {} - {}",FileSystemHelper::WideToUtf8(wideRelativePath),e.what());
+                std::error_code relativeEc;
+                std::string relativePath=
+                    std::filesystem::relative(entry.path(),sourcePath,relativeEc)
+                    .generic_string();
+                if(relativeEc) {
+                    LOG_ERROR("计算相对路径失败: {} - {}",
+                        entry.path().string(),relativeEc.message());
                     failedCount++;
                     continue;
                 }
 
-                std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
-                if(!targetDir.empty()) {
-                    std::filesystem::create_directories(targetDir);
+                std::string targetPath;
+                try {
+                    targetPath=FileSystemHelper::SecureCombine(gameDir,relativePath);
+                }
+                catch(const std::exception& e) {
+                    LOG_ERROR("路径遍历被阻止: {} - {}",relativePath,e.what());
+                    failedCount++;
+                    continue;
                 }
 
-                bool copySuccess=fsHelper.CopyFileWithUnicode(entry.path().wstring(),wideTargetPath);
+                // 确保目标目录存在
+                std::filesystem::path targetFilePath=std::filesystem::u8path(targetPath);
+                std::filesystem::path targetDir=targetFilePath.parent_path();
+                if(!targetDir.empty()) {
+                    std::error_code dirEc;
+                    std::filesystem::create_directories(targetDir,dirEc);
+                    // 目录创建失败可记录日志，但继续尝试复制
+                }
+
+                bool copySuccess=fsHelper.CopySingleFile(
+                    entry.path().string(),targetPath);
 
                 if(copySuccess) {
                     fileCount++;
-
                     if(fileCount%BATCH_SIZE==0) {
                         updateOrchestrator.OptimizeMemoryUsage();
-                        std::cout<<"\r应用更新: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"     ";
+                        std::cout<<"\r应用更新: "<<fileCount
+                            <<" 个文件已处理，失败: "<<failedCount
+                            <<"     ";
                         std::cout.flush();
                     }
                 }
                 else {
                     failedCount++;
-                    LOG_WARN("文件复制失败: {}", fsHelper.WideToUtf8(entry.path().wstring()));
+                    LOG_WARN("文件复制失败: {}",entry.path().string());
                 }
             }
         }
 
-        std::cout<<"\r应用更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
-        LOG_INFO("应用更新完成: {} 个文件已处理，失败: {}", fileCount, failedCount);
+        std::cout<<"\r应用更新完成: "<<fileCount
+            <<" 个文件已处理，失败: "<<failedCount
+            <<"                  "<<std::endl;
+        LOG_INFO("应用更新完成: {} 个文件已处理，失败: {}",fileCount,failedCount);
 
         if(failedCount>0) {
-            LOG_WARN("{} 个文件处理失败", failedCount);
+            LOG_WARN("{} 个文件处理失败",failedCount);
             return false;
         }
-
         return true;
     }
     catch(const std::exception& e) {
-        LOG_ERROR("应用更新失败: {}", e.what());
+        LOG_ERROR("应用更新失败: {}",e.what());
         return false;
     }
 }
@@ -585,37 +598,50 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
     int fileCount=0;
     int failedCount=0;
 
-    std::wstring wideTempDir=fsHelper.Utf8ToWide(tempDir);
-    std::wstring wideGameDir=fsHelper.Utf8ToWide(updateOrchestrator.GetGameDirectory());
-
-    if(wideTempDir.empty()||wideGameDir.empty()) {
-        LOG_ERROR("无法转换路径为宽字符");
-        return false;
-    }
+    const std::string gameDir=updateOrchestrator.GetGameDirectory();
+    std::filesystem::path tempPath=std::filesystem::u8path(tempDir);
 
     try {
-        for(const auto& entry:std::filesystem::recursive_directory_iterator(wideTempDir)) {
+        for(const auto& entry:
+            std::filesystem::recursive_directory_iterator(tempPath)) {
             if(entry.is_regular_file()) {
-                std::wstring wideRelativePath=entry.path().wstring().substr(wideTempDir.size()+1);
-                std::wstring wideTargetPath;
-                try {
-                    wideTargetPath=FileSystemHelper::SecureCombineW(wideGameDir,wideRelativePath);
-                }
-                catch(const std::exception& e) {
-					LOG_ERROR("路径遍历被阻止: {} - {}",FileSystemHelper::WideToUtf8(wideRelativePath),e.what());
+                std::error_code relativeEc;
+                std::string relativePath=
+                    std::filesystem::relative(entry.path(),tempPath,relativeEc)
+                    .generic_string();
+                if(relativeEc) {
+                    LOG_ERROR("计算相对路径失败: {} - {}",
+                        entry.path().string(),relativeEc.message());
                     failedCount++;
                     continue;
                 }
-                std::filesystem::path targetDir=std::filesystem::path(wideTargetPath).parent_path();
+
+                std::string targetPath;
+                try {
+                    targetPath=FileSystemHelper::SecureCombine(gameDir,relativePath);
+                }
+                catch(const std::exception& e) {
+                    LOG_ERROR("路径遍历被阻止: {} - {}",
+                        relativePath,e.what());
+                    failedCount++;
+                    continue;
+                }
+
+                std::filesystem::path targetFilePath=std::filesystem::u8path(targetPath);
+                std::filesystem::path targetDir=targetFilePath.parent_path();
                 if(!targetDir.empty()) {
                     std::filesystem::create_directories(targetDir);
                 }
-                bool copySuccess=fsHelper.CopyFileWithUnicode(entry.path().wstring(),wideTargetPath);
+
+                bool copySuccess=fsHelper.CopySingleFile(
+                    entry.path().string(),targetPath);
 
                 if(copySuccess) {
                     fileCount++;
                     if(fileCount%100==0) {
-                        std::cout<<"\r更新进度: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"     ";
+                        std::cout<<"\r更新进度: "<<fileCount
+                            <<" 个文件已处理，失败: "<<failedCount
+                            <<"     ";
                         std::cout.flush();
                     }
                 }
@@ -626,12 +652,14 @@ bool IncrementalUpdatePlanner::ApplyAllFilesFromUpdate(const std::string& tempDi
         }
     }
     catch(const std::exception& e) {
-        LOG_ERROR("遍历临时目录失败: {}", e.what());
+        LOG_ERROR("遍历临时目录失败: {}",e.what());
         return false;
     }
 
-    std::cout<<"\r更新完成: "<<fileCount<<" 个文件已处理，失败: "<<failedCount<<"                  "<<std::endl;
-    LOG_INFO("更新了 {} 个文件，失败: {}", fileCount, failedCount);
+    std::cout<<"\r更新完成: "<<fileCount
+        <<" 个文件已处理，失败: "<<failedCount
+        <<"                  "<<std::endl;
+    LOG_INFO("更新了 {} 个文件，失败: {}",fileCount,failedCount);
 
     return fileCount>0&&failedCount==0;
 }

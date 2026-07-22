@@ -28,7 +28,7 @@ bool ConfigManager::LoadConfig() {
         return false;
     }
 
-    std::ifstream file(configPath);
+    std::ifstream file(std::filesystem::u8path(configPath));
     if(!file.is_open()) {
         LOG_WARN("无法打开配置文件: {}", configPath);
         return false;
@@ -187,7 +187,7 @@ bool ConfigManager::WriteSkipMajorVersionCheck(bool skip) {
 }
 
 bool ConfigManager::ConfigExists(){
-    return std::filesystem::exists(configPath);
+    return std::filesystem::exists(std::filesystem::u8path(configPath));
 }
 
 bool ConfigManager::InitializeDefaultConfig(){
@@ -248,7 +248,7 @@ bool ConfigManager::WriteConfig(const Json::Value& config){
         return false;
     }
 
-    std::ofstream file(configPath);
+    std::ofstream file(std::filesystem::u8path(configPath));
     if(!file.is_open()){
         LOG_ERROR("无法打开配置文件进行写入: {}", configPath);
         return false;
@@ -266,7 +266,7 @@ bool ConfigManager::WriteConfig(const Json::Value& config){
 }
 
 bool ConfigManager::EnsureConfigDirectory(){
-    std::filesystem::path path(configPath);
+    std::filesystem::path path=std::filesystem::u8path(configPath);
     std::filesystem::path dir=path.parent_path();
 
     if(!dir.empty()&&!std::filesystem::exists(dir)){

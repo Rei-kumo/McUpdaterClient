@@ -20,7 +20,7 @@ std::string FileHasher::CalculateMemoryHash(const std::vector<unsigned char>& da
 std::string FileHasher::CalculateDirectoryHash(const std::string& directoryPath,const std::string& algorithm) {
 	std::string combinedContent;
 
-	for(const auto& entry:std::filesystem::recursive_directory_iterator(directoryPath)) {
+	for(const auto& entry:std::filesystem::recursive_directory_iterator(std::filesystem::u8path(directoryPath))) {
 		if(entry.is_regular_file()) {
 			std::string fileHash=CalculateFileHashStream(entry.path().string(),algorithm);
 			combinedContent+=entry.path().filename().string()+":"+fileHash+";";
@@ -77,7 +77,7 @@ std::string FileHasher::SHA256Hash(const std::vector<unsigned char>& data) {
 }
 // 在FileHasher类中添加
 std::string FileHasher::CalculateFileHashStream(const std::string& filePath,const std::string& algorithm) {
-    std::ifstream file(filePath,std::ios::binary);
+	std::ifstream file(std::filesystem::u8path(filePath),std::ios::binary);
     if(!file) {
         return "";
     }

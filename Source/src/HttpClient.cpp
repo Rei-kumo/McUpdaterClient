@@ -83,10 +83,11 @@ bool HttpClient::DownloadFileWithProgress(const std::string& url,const std::stri
     curl_easy_setopt(curl,CURLOPT_LOW_SPEED_TIME,30L);
 
     FILE* file=nullptr;
-    errno_t err=fopen_s(&file,outputPath.c_str(),"wb");
+    std::wstring wpath=std::filesystem::u8path(outputPath).wstring();
+    file=_wfopen(wpath.c_str(),L"wb");
 
-    if(err!=0||!file) {
-        LOG_ERROR("无法创建文件: {}", outputPath);
+    if(!file) {
+        LOG_ERROR("无法创建文件: {}",outputPath);
         return false;
     }
 
@@ -112,11 +113,12 @@ bool HttpClient::DownloadFileWithProgress(const std::string& url,const std::stri
     fclose(file);
 
     if(res!=CURLE_OK) {
-        LOG_ERROR("下载失败: {}", curl_easy_strerror(res));
+        LOG_ERROR("下载失败: {}",curl_easy_strerror(res));
         if(res==CURLE_OPERATION_TIMEDOUT) {
             LOG_ERROR(" (超时)");
         }
-        std::remove(outputPath.c_str());
+        std::wstring wpath=std::filesystem::u8path(outputPath).wstring();
+        _wremove(wpath.c_str());
         return false;
     }
 

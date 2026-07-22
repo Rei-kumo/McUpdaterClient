@@ -1,36 +1,24 @@
 ﻿#include "FileSystemHelper.h"
-#include <set>
-#include "SelfUpdater.h"
+
 void FileSystemHelper::EnsureDirectoryExists(const std::string& path) {
     try {
         if(path.empty()) {
 			LOG_WARN("警告: 路径为空");
             return;
         }
+            std::error_code ec;
 
-        std::filesystem::path dirPath(path);
+        std::filesystem::path dirPath=std::filesystem::u8path(path);
         dirPath=std::filesystem::absolute(dirPath);
 
         if(!std::filesystem::exists(dirPath)) {
-            LOG_INFO("创建目录: {}", dirPath.string());
             bool created=std::filesystem::create_directories(dirPath);
-
-            if(created) {
-                LOG_INFO("目录创建成功: {}", dirPath.string());
+            if(!created&&!std::filesystem::exists(dirPath)) {
+                LOG_ERROR("目录创建失败: {}",std::string{dirPath.u8string()});
+                return;
             }
-            else {
-                LOG_WARN("目录可能已存在: {}", dirPath.string());
-            }
-            if(!std::filesystem::exists(dirPath)) {
-                LOG_ERROR("错误: 目录创建后仍然不存在: {}", dirPath.string());
-            }
-            else if(!std::filesystem::is_directory(dirPath)) {
-                LOG_ERROR("错误: 路径存在但不是目录: {}", dirPath.string());
-            }
-        }
-        else {
             if(!std::filesystem::is_directory(dirPath)) {
-                LOG_ERROR("错误: 路径存在但不是目录: {}", dirPath.string());
+                LOG_ERROR("路径存在但不是目录: {}",std::string{dirPath.u8string()});
             }
         }
     }
@@ -46,34 +34,41 @@ void FileSystemHelper::EnsureDirectoryExists(const std::string& path) {
 }
 
 bool FileSystemHelper::BackupFile(const std::string& filePath) {
-    if(!std::filesystem::exists(filePath)) {
+    std::filesystem::path srcPath=std::filesystem::u8path(filePath);
+
+    if(!std::filesystem::exists(srcPath)) {
         return true;
     }
 
-    std::string backupPath=filePath+".backup";
-    std::string timestamp=std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    std::string tempBackupPath=backupPath+"_"+timestamp;
+    std::string backupPathStr=filePath+".backup";
+    std::string timestamp=std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count());
+    std::string tempBackupPathStr=backupPathStr+"_"+timestamp;
+
+    std::filesystem::path backupPath=std::filesystem::u8path(backupPathStr);
+    std::filesystem::path tempBackupPath=std::filesystem::u8path(tempBackupPathStr);
 
     try {
-        if(std::filesystem::is_directory(filePath)) {
-            std::filesystem::copy(filePath,tempBackupPath,
+        if(std::filesystem::is_directory(srcPath)) {
+            std::filesystem::copy(srcPath,tempBackupPath,
                 std::filesystem::copy_options::recursive|
                 std::filesystem::copy_options::overwrite_existing);
         }
         else {
-            std::filesystem::copy_file(filePath,tempBackupPath,
+            std::filesystem::copy_file(srcPath,tempBackupPath,
                 std::filesystem::copy_options::overwrite_existing);
         }
+
         if(std::filesystem::exists(backupPath)) {
             std::filesystem::remove_all(backupPath);
         }
         std::filesystem::rename(tempBackupPath,backupPath);
 
-        LOG_INFO("备份完成: {} -> {}", filePath, backupPath);
+        LOG_INFO("备份完成: {} -> {}",filePath,backupPathStr);
         return true;
     }
     catch(const std::exception& e) {
-        LOG_WARN("备份失败: {} - {}", filePath, e.what());
+        LOG_WARN("备份失败: {} - {}",filePath,e.what());
         try {
             if(std::filesystem::exists(tempBackupPath)) {
                 std::filesystem::remove_all(tempBackupPath);
@@ -81,10 +76,10 @@ bool FileSystemHelper::BackupFile(const std::string& filePath) {
         }
         catch(...) {
         }
-
         return false;
     }
 }
+
 void FileSystemHelper::CleanupOrphanedFiles(const std::string& baseDir,
     const std::string& relativeDir,
     const Json::Value& expectedContents) {
@@ -113,9 +108,11 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& baseDir,
         LOG_DEBUG("   - {}", file);
     }
 
+    std::filesystem::path fullDirPathObj=std::filesystem::u8path(fullDirPath);
+
     std::error_code ec;
     auto it=std::filesystem::recursive_directory_iterator(
-        fullDirPath,
+        fullDirPathObj,
         std::filesystem::directory_options::skip_permission_denied,
         ec);
     if(ec) {
@@ -137,13 +134,13 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& baseDir,
         }
 
         if(entry.is_regular_file()) {
-            std::string relativePath=std::filesystem::relative(entry.path(),fullDirPath,ec).string();
+            std::string relativePath=std::filesystem::relative(entry.path(),fullDirPathObj,ec).generic_u8string();
             if(ec) {
-                LOG_ERROR("计算相对路径失败: {} - {}", entry.path().string(), ec.message());
+                LOG_ERROR("计算相对路径失败: {} - {}",
+                    std::string{entry.path().u8string()},ec.message());
                 it.increment(ec);
                 continue;
             }
-            std::replace(relativePath.begin(),relativePath.end(),'\\','/');
 
             LOG_DEBUG("检查文件: {}", relativePath);
 
@@ -168,84 +165,45 @@ void FileSystemHelper::CleanupOrphanedFiles(const std::string& baseDir,
         }
     }
 }
-std::wstring FileSystemHelper::Utf8ToWide(const std::string& utf8Str) {
-    if(utf8Str.empty()) return L"";
 
-    int requiredSize=MultiByteToWideChar(CP_UTF8,0,utf8Str.c_str(),-1,NULL,0);
-    if(requiredSize==0) {
-        DWORD error=GetLastError();
-        LOG_ERROR("MultiByteToWideChar failed, error: {}", error);
-        return L"";
+bool FileSystemHelper::CopySingleFile(const std::string& source,const std::string& target) {
+    std::error_code ec;
+    std::filesystem::copy_file(
+        std::filesystem::u8path(source),
+        std::filesystem::u8path(target),
+        std::filesystem::copy_options::overwrite_existing,
+        ec
+    );
+    if(ec) {
+        LOG_ERROR("复制文件失败: {} -> {}，错误: {}",source,target,ec.message());
+        return false;
     }
-
-    std::wstring wideStr(requiredSize,0);
-    if(MultiByteToWideChar(CP_UTF8,0,utf8Str.c_str(),-1,&wideStr[0],requiredSize)==0) {
-        DWORD error=GetLastError();
-        LOG_ERROR("MultiByteToWideChar failed, error: {}", error);
-        return L"";
-    }
-    wideStr.pop_back();
-    return wideStr;
-}
-
-std::string FileSystemHelper::WideToUtf8(const std::wstring& wideStr) {
-    if(wideStr.empty()) return "";
-
-    int requiredSize=WideCharToMultiByte(CP_UTF8,0,wideStr.c_str(),-1,NULL,0,NULL,NULL);
-    if(requiredSize==0) {
-        DWORD error=GetLastError();
-        LOG_ERROR("WideCharToMultiByte failed, error: {}", error);
-        return "";
-    }
-
-    std::string utf8Str(requiredSize,0);
-    if(WideCharToMultiByte(CP_UTF8,0,wideStr.c_str(),-1,&utf8Str[0],requiredSize,NULL,NULL)==0) {
-        DWORD error=GetLastError();
-        LOG_ERROR("WideCharToMultiByte failed, error: {}", error);
-        return "";
-    }
-    utf8Str.pop_back();
-    return utf8Str;
-}
-bool FileSystemHelper::CopyFileWithUnicode(const std::wstring& sourcePath,const std::wstring& targetPath) {
-    BOOL result=CopyFileW(sourcePath.c_str(),targetPath.c_str(),FALSE);
-
-    if(!result) {
-        DWORD error=GetLastError();
-
-        if(error==ERROR_ACCESS_DENIED) {
-            DeleteFileW(targetPath.c_str());
-            result=CopyFileW(sourcePath.c_str(),targetPath.c_str(),FALSE);
-
-            if(!result) {
-                error=GetLastError();
-                LOG_ERROR("复制文件失败 (删除后重试): {} -> {}，错误码: {}", WideToUtf8(sourcePath), WideToUtf8(targetPath), error);
-                return false;
-            }
-        }
-        else {
-            LOG_ERROR("复制文件失败: {} -> {}，错误码: {}", WideToUtf8(sourcePath), WideToUtf8(targetPath), error);
-            return false;
-        }
-    }
-
     return true;
 }
+
 void FileSystemHelper::CleanupTempExtractDir(const std::string& extractPath) {
     LOG_INFO("清理临时解压目录...");
-    if(!extractPath.empty()&&std::filesystem::exists(extractPath)) {
+    std::filesystem::path extractPathObj=std::filesystem::u8path(extractPath);
+    if(!extractPath.empty()&&std::filesystem::exists(extractPathObj)) {
         try {
-            std::string tempDir=std::filesystem::temp_directory_path().string();
-            if(extractPath.find(tempDir)==0) {
-                std::filesystem::remove_all(extractPath);
-                LOG_INFO("已清理临时解压目录: {}", extractPath);
+            std::string tempDir=std::filesystem::temp_directory_path().generic_u8string();
+            std::string extractPathNormalized=extractPath;
+            std::replace(extractPathNormalized.begin(),extractPathNormalized.end(),'\\','/');
+
+            if(extractPathNormalized.size()>tempDir.size()&&
+                extractPathNormalized.compare(0,tempDir.size(),tempDir)==0) {
+                if(extractPathNormalized[tempDir.size()]=='/') {
+                    std::filesystem::remove_all(extractPathObj);
+                    LOG_INFO("已清理临时解压目录: {}",extractPath);
+                    return;
+                }
             }
             else {
-                LOG_INFO("保留非临时目录: {}", extractPath);
+                LOG_INFO("保留非临时目录: {}",extractPath);
             }
         }
         catch(const std::exception& e) {
-            LOG_WARN("无法清理解压目录: {}", e.what());
+            LOG_WARN("无法清理解压目录: {}",e.what());
         }
     }
     else {
@@ -253,15 +211,19 @@ void FileSystemHelper::CleanupTempExtractDir(const std::string& extractPath) {
     }
 }
 
-void FileSystemHelper::CleanupTempFiles(const std::string& zipFilePath,const std::string& extractPath) {
+void FileSystemHelper::CleanupTempFiles(const std::string& zipFilePath,
+    const std::string& extractPath) {
     LOG_INFO("清理所有临时文件...");
-    if(!zipFilePath.empty()&&std::filesystem::exists(zipFilePath)) {
+
+    std::filesystem::path zipPathObj=std::filesystem::u8path(zipFilePath);
+
+    if(!zipFilePath.empty()&&std::filesystem::exists(zipPathObj)) {
         try {
-            std::filesystem::remove(zipFilePath);
-            LOG_INFO("已清理临时 ZIP 文件: {}", zipFilePath);
+            std::filesystem::remove(zipPathObj);
+            LOG_INFO("已清理临时 ZIP 文件: {}",zipFilePath);
         }
         catch(const std::exception& e) {
-            LOG_WARN("无法删除临时 ZIP 文件: {}", e.what());
+            LOG_WARN("无法删除临时 ZIP 文件: {}",e.what());
         }
     }
     CleanupTempExtractDir(extractPath);
@@ -269,16 +231,17 @@ void FileSystemHelper::CleanupTempFiles(const std::string& zipFilePath,const std
 
 bool FileSystemHelper::ValidateExtraction(const std::string& extractPath) {
     LOG_INFO("验证解压结果...");
+    std::filesystem::path extractPathObj=std::filesystem::u8path(extractPath);
 
-    if(!std::filesystem::exists(extractPath)) {
-        LOG_ERROR("解压目录不存在: {}", extractPath);
+    if(!std::filesystem::exists(extractPathObj)) {
+        LOG_ERROR("解压目录不存在: {}",std::string{extractPathObj.u8string()});
         return false;
     }
 
     try {
         int fileCount=0;
         int dirCount=0;
-        for(const auto& entry:std::filesystem::recursive_directory_iterator(extractPath)) {
+        for(const auto& entry:std::filesystem::recursive_directory_iterator(extractPathObj,std::filesystem::directory_options::skip_permission_denied)){
             if(entry.is_directory()) {
                 dirCount++;
             }
@@ -287,7 +250,7 @@ bool FileSystemHelper::ValidateExtraction(const std::string& extractPath) {
                 try {
                     auto fileSize=std::filesystem::file_size(entry.path());
                     if(fileSize==0) {
-                        LOG_WARN("发现空文件: {}", entry.path().string());
+                        LOG_WARN("发现空文件: {}",std::string{entry.path().u8string()});
                     }
                 }
                 catch(...) {
@@ -319,20 +282,20 @@ std::string FileSystemHelper::SecureCombine(const std::string& baseDir,const std
     }
 
     std::error_code ec;
-    std::filesystem::path base=std::filesystem::absolute(baseDir,ec);
+    std::filesystem::path base=std::filesystem::absolute(std::filesystem::u8path(baseDir),ec);
     if(ec) {
         throw std::runtime_error("SecureCombine: cannot resolve base path: "+baseDir);
     }
     base=std::filesystem::weakly_canonical(base,ec);
     if(ec) {
-        base=std::filesystem::absolute(baseDir,ec);
+        base=std::filesystem::absolute(std::filesystem::u8path(baseDir),ec);
         if(ec) {
             throw std::runtime_error("SecureCombine: base path does not exist and cannot be resolved: "+baseDir);
         }
     }
     std::string cleanUserPath=userPath;
     std::replace(cleanUserPath.begin(),cleanUserPath.end(),'\\','/');
-    std::filesystem::path full=base/cleanUserPath;
+    std::filesystem::path full=base/std::filesystem::u8path(cleanUserPath);
     full=std::filesystem::weakly_canonical(full,ec);
     if(ec) {
         std::filesystem::path parent=full.parent_path();
@@ -342,10 +305,8 @@ std::string FileSystemHelper::SecureCombine(const std::string& baseDir,const std
         }
         full=parent/full.filename();
     }
-    std::string fullStr=full.string();
-    std::string baseStr=base.string();
-    std::replace(fullStr.begin(),fullStr.end(),'\\','/');
-    std::replace(baseStr.begin(),baseStr.end(),'\\','/');
+    std::string fullStr=full.generic_u8string();
+    std::string baseStr=base.generic_u8string();
     if(baseStr.back()!='/') {
         baseStr+='/';
     }
@@ -357,67 +318,10 @@ std::string FileSystemHelper::SecureCombine(const std::string& baseDir,const std
         fullStr.compare(0,baseStr.size(),baseStr)!=0) {
         throw std::runtime_error("Path traversal detected: "+userPath);
     }
-    if(fullStr.find("/../")!=std::string::npos||
-        fullStr.find("\\..\\")!=std::string::npos) {
+    if(fullStr.find("/../")!=std::string::npos) {
         throw std::runtime_error("Path traversal attempt (..) in resolved path: "+userPath);
     }
-    std::string result=full.string();
+    std::string result=full.generic_u8string();
     if(!result.empty()&&result.back()=='/') result.pop_back();
-    return result;
-}
-
-std::wstring FileSystemHelper::SecureCombineW(const std::wstring& baseDir,const std::wstring& userPath) {
-    if(baseDir.empty()) {
-        throw std::runtime_error("SecureCombineW: base directory is empty");
-    }
-
-    std::error_code ec;
-    std::filesystem::path base(baseDir);
-    base=std::filesystem::absolute(base,ec);
-    if(ec) {
-        throw std::runtime_error("SecureCombineW: cannot resolve base path");
-    }
-    base=std::filesystem::weakly_canonical(base,ec);
-    if(ec) {
-        base=std::filesystem::absolute(baseDir,ec);
-        if(ec) {
-            throw std::runtime_error("SecureCombineW: base path does not exist");
-        }
-    }
-
-    std::wstring cleanUserPath=userPath;
-    std::replace(cleanUserPath.begin(),cleanUserPath.end(),L'\\',L'/');
-
-    std::filesystem::path full=base/cleanUserPath;
-    full=std::filesystem::weakly_canonical(full,ec);
-    if(ec) {
-        std::filesystem::path parent=full.parent_path();
-        parent=std::filesystem::weakly_canonical(parent,ec);
-        if(ec) {
-            throw std::runtime_error("SecureCombineW: cannot resolve path");
-        }
-        full=parent/full.filename();
-    }
-
-    std::wstring fullStr=full.wstring();
-    std::wstring baseStr=base.wstring();
-
-    std::replace(fullStr.begin(),fullStr.end(),L'\\',L'/');
-    std::replace(baseStr.begin(),baseStr.end(),L'\\',L'/');
-
-    if(baseStr.back()!=L'/') baseStr+=L'/';
-    if(fullStr.back()!=L'/') fullStr+=L'/';
-
-    if(fullStr.size()<baseStr.size()||
-        fullStr.compare(0,baseStr.size(),baseStr)!=0) {
-        throw std::runtime_error("Path traversal detected (wide)");
-    }
-
-    if(fullStr.find(L"/../")!=std::wstring::npos) {
-        throw std::runtime_error("Path traversal attempt (..) in resolved wide path");
-    }
-
-    std::wstring result=full.wstring();
-    if(!result.empty()&&result.back()==L'/') result.pop_back();
     return result;
 }

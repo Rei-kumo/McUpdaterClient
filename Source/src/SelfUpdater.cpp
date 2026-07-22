@@ -25,7 +25,7 @@ std::wstring SelfUpdater::GetShortPathNameSafe(const std::wstring& longPath) {
     if(longPath.find(L'&')!=std::wstring::npos||
         longPath.find(L'|')!=std::wstring::npos||
         longPath.find(L';')!=std::wstring::npos) {
-		LOG_ERROR("路径包含危险字符，拒绝使用: {}",FileSystemHelper::WideToUtf8(longPath));
+        LOG_ERROR("路径包含危险字符，拒绝使用: {}",std::filesystem::path(longPath).u8string());
         return L"";
     }
     return longPath;
@@ -37,7 +37,7 @@ void SelfUpdater::CleanupOldBackup(const std::wstring& currentExePath) {
         std::error_code ec;
         std::filesystem::remove(backupPath,ec);
         if(!ec) {
-            LOG_INFO("已清理旧版本备份: {}", FileSystemHelper::WideToUtf8(backupPath));
+            LOG_INFO("已清理旧版本备份: {}",std::filesystem::path(backupPath).u8string());
         }
     }
 }
@@ -153,10 +153,10 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
         }
 
         std::error_code ec;
-        auto fileSize=std::filesystem::file_size(tempExePath,ec);
+        auto fileSize=std::filesystem::file_size(std::filesystem::u8path(tempExePath),ec);
         if(ec||fileSize==0) {
             LOG_ERROR("下载的文件无效或为空，大小: {}", fileSize);
-            std::filesystem::remove(tempExePath);
+            std::filesystem::remove(std::filesystem::u8path(tempExePath));
             downloading=false;
             return false;
         }
@@ -164,7 +164,7 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
         if(fileSize<1024) {
             LOG_WARN("下载的文件大小异常（小于1KB），可能是错误页面，文件大小: {}", fileSize);
             LOG_WARN("文件内容预览: ");
-            std::ifstream testFile(tempExePath,std::ios::binary);
+            std::ifstream testFile(std::filesystem::u8path(tempExePath),std::ios::binary);
             if(testFile) {
                 char buffer[256];
                 testFile.read(buffer,255);
@@ -172,7 +172,7 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
                 LOG_INFO("{}", buffer);
             }
             testFile.close();
-            std::filesystem::remove(tempExePath);
+            std::filesystem::remove(std::filesystem::u8path(tempExePath));
             downloading=false;
             return false;
         }
@@ -195,7 +195,7 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
 
             if(actualHash.empty()) {
                 LOG_ERROR("无法计算文件的哈希值");
-                std::filesystem::remove(tempExePath);
+                std::filesystem::remove(std::filesystem::u8path(tempExePath));
                 downloading=false;
                 return false;
             }
@@ -206,7 +206,7 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
                 LOG_ERROR("文件哈希不匹配！更新中止。");
                 LOG_ERROR("期望: {}", expectedHashValue);
                 LOG_ERROR("实际: {}", actualHash);
-                std::filesystem::remove(tempExePath);
+                std::filesystem::remove(std::filesystem::u8path(tempExePath));
                 downloading=false;
                 return false;
             }
@@ -229,13 +229,13 @@ bool SelfUpdater::DownloadNewLauncher(const std::string& downloadUrl,
 }
 
 bool SelfUpdater::ApplyUpdate() {
-    if(!std::filesystem::exists(tempExePath)) {
+    if(!std::filesystem::exists(std::filesystem::u8path(tempExePath))) {
         LOG_ERROR("临时文件不存在: {}", tempExePath);
         return false;
     }
 
     std::wstring curExe=GetCurrentExePathW();
-    std::wstring newExe=FileSystemHelper::Utf8ToWide(tempExePath);
+    std::wstring newExe=std::filesystem::u8path(tempExePath).wstring();
 
     CleanupOldBackup(curExe);
     if(TryNormalReplace(newExe,curExe)) {

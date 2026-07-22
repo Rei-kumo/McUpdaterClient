@@ -13,6 +13,7 @@ public:
 private:
     std::mutex mtx_;
     std::chrono::steady_clock::time_point lastUpdate_{};
+    bool dualMode_=false;
     long long lastCurrent_=-1;
     static constexpr int BAR_WIDTH=40;
 

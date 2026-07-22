@@ -9,10 +9,13 @@ struct LoggerGuard {
     }
 };
 int main(int argc,char* argv[]) {
+    try {
     SetConsoleOutputCP(CP_UTF8);
+    std::locale::global(std::locale("zh_CN.UTF-8"));
+    std::cout.imbue(std::locale());
     if(argc==4&&strcmp(argv[1],"--elevated-replace")==0) {
-        std::wstring newExe=FileSystemHelper::Utf8ToWide(argv[2]);
-        std::wstring targetExe=FileSystemHelper::Utf8ToWide(argv[3]);
+        std::wstring newExe=std::filesystem::u8path(argv[2]).wstring();
+        std::wstring targetExe=std::filesystem::u8path(argv[3]).wstring();
 
         wchar_t curExe[MAX_PATH];
         GetModuleFileNameW(NULL,curExe,MAX_PATH);
@@ -166,5 +169,11 @@ int main(int argc,char* argv[]) {
         std::cin.ignore();
         std::cin.get();
     }
+     }
+     catch(const std::exception& e) {
+         LOG_ERROR("未捕获异常: {}",e.what());
+         std::cerr<<"Fatal error: "<<e.what()<<std::endl;
+         return 1;
+     }
 
 }

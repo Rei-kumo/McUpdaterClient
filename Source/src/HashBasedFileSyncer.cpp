@@ -81,7 +81,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
         totalChecked++;
         processedInBatch++;
 
-        if(!std::filesystem::exists(fullPath)) {
+        if(!std::filesystem::exists(std::filesystem::u8path(fullPath))) {
             LOG_DEBUG("文件不存在: {}", relativePath);
             allFilesConsistent=false;
             missingFiles++;
@@ -114,7 +114,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             continue;
         }
 
-        if(!std::filesystem::exists(fullPath)) {
+        if(!std::filesystem::exists(std::filesystem::u8path(fullPath))) {
             LOG_DEBUG("目录不存在: {}", relativePath);
             allFilesConsistent=false;
             missingFiles++;
@@ -129,7 +129,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             std::string expectedHash=contentInfo["hash"].asString();
             std::string fileFullPath;
             try {
-                fileFullPath=FileSystemHelper::SecureCombine(fullPath,fileRelativePath);
+                fileFullPath=FileSystemHelper::SecureCombine(updateOrchestrator.GetGameDirectory(),fileRelativePath);
             }
             catch(const std::exception& e) {
                 LOG_ERROR("Path traversal blocked in directory content check: {}", e.what());
@@ -141,7 +141,7 @@ bool HashBasedFileSyncer::CheckFileConsistency(const Json::Value& fileManifest,c
             totalChecked++;
             processedInBatch++;
 
-            if(!std::filesystem::exists(fileFullPath)) {
+            if(!std::filesystem::exists(std::filesystem::u8path(fileFullPath))) {
                 LOG_DEBUG("目录内文件不存在: {}", fileRelativePath);
                 allFilesConsistent=false;
                 missingFiles++;
@@ -200,7 +200,7 @@ bool HashBasedFileSyncer::SyncFilesByHash(const Json::Value& updateInfo) {
         if(!isEmpty) continue;
 
         std::string relativePath=dirInfo["path"].asString();
-        std::filesystem::path fullPath=std::filesystem::absolute(updateOrchestrator.GetGameDirectory())/relativePath;
+        std::filesystem::path fullPath=std::filesystem::absolute(std::filesystem::u8path(updateOrchestrator.GetGameDirectory()))/std::filesystem::u8path(relativePath);
         if(!std::filesystem::exists(fullPath)) {
             try {
                 std::filesystem::create_directories(fullPath);
@@ -255,9 +255,9 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
             allSuccess=false;
             continue;
         }
-        std::filesystem::path fullPath=std::filesystem::path(fullPathStr);
+        std::filesystem::path fullPath=std::filesystem::u8path(fullPathStr);
         std::filesystem::path parentDir=fullPath.parent_path();
-        fsHelper.EnsureDirectoryExists(parentDir.string());
+        fsHelper.EnsureDirectoryExists(parentDir.generic_u8string());
 
         bool canWrite=false;
         try {
@@ -339,7 +339,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
         }
 
         std::error_code ec;
-        auto actualSize=std::filesystem::file_size(fullPathStr,ec);
+        auto actualSize=std::filesystem::file_size(std::filesystem::u8path(fullPathStr),ec);
         std::string sizeStr=ec?"未知大小":progressReporter.FormatBytes(actualSize);
 
         if(!expectedHash.empty()) {
@@ -348,7 +348,7 @@ bool HashBasedFileSyncer::UpdateFilesByHash(const Json::Value& fileManifest,cons
                 LOG_ERROR("哈希不匹配，删除文件");
                 LOG_ERROR("文件哈希不匹配: {} 期望 {} 实际 {}", relativePath, expectedHash, downloadedHash);
                 std::error_code removeEc;
-                std::filesystem::remove(fullPathStr,removeEc);
+                std::filesystem::remove(std::filesystem::u8path(fullPathStr),removeEc);
                 if(removeEc) {
                     LOG_WARN("删除损坏文件失败: {}", removeEc.message());
                 }
@@ -418,7 +418,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
             dirSuccess=false;
             continue;
         }
-        if(!std::filesystem::exists(tempFilePath)) {
+        if(!std::filesystem::exists(std::filesystem::u8path(tempFilePath))) {
             LOG_WARN("解压文件中不存在: {}", fileRelativePath);
             dirSuccess=false;
             continue;
@@ -436,10 +436,10 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
             }
         }
 
-        fsHelper.EnsureDirectoryExists(std::filesystem::path(targetFilePath).parent_path().string());
+        fsHelper.EnsureDirectoryExists(std::filesystem::u8path(targetFilePath).parent_path().generic_u8string());
 
         try {
-            std::filesystem::copy(tempFilePath,targetFilePath,
+            std::filesystem::copy(std::filesystem::u8path(tempFilePath),std::filesystem::u8path(targetFilePath),
                 std::filesystem::copy_options::overwrite_existing);
             LOG_INFO("更新文件: {}", fileRelativePath);
         }
@@ -454,7 +454,7 @@ bool HashBasedFileSyncer::SyncDirectoryByHash(const Json::Value& dirInfo) {
     }
 
     try {
-        std::filesystem::remove_all(tempDir);
+        std::filesystem::remove_all(std::filesystem::u8path(tempDir));
     }
     catch(const std::exception& e) {
         LOG_WARN("清理临时目录失败: {}", e.what());
@@ -479,14 +479,15 @@ bool HashBasedFileSyncer::ProcessDeleteList(const Json::Value& deleteList) {
         }
 
         try {
-            if(std::filesystem::exists(fullPath)) {
-                if(std::filesystem::is_directory(fullPath)) {
-                    std::filesystem::remove_all(fullPath);
-                    LOG_INFO("删除目录: {}", path);
+            auto p=std::filesystem::u8path(fullPath);
+            if(std::filesystem::exists(p)) {
+                if(std::filesystem::is_directory(p)) {
+                    std::filesystem::remove_all(p);
+                    LOG_INFO("删除目录: {}",path);
                 }
                 else {
-                    std::filesystem::remove(fullPath);
-                    LOG_INFO("删除文件: {}", path);
+                    std::filesystem::remove(p);
+                    LOG_INFO("删除文件: {}",path);
                 }
             }
         }

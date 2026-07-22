@@ -446,7 +446,7 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 LOG_WARN("尝试创建空目录作为后备: {}", safeFullPath);
 
                 try {
-                    std::filesystem::create_directories(safeFullPath);
+                    std::filesystem::create_directories(std::filesystem::u8path(safeFullPath));
                     LOG_INFO("已创建空目录: {}", safeFullPath);
                 }
                 catch(const std::exception& e) {
@@ -468,10 +468,10 @@ bool UpdateOrchestrator::SyncFiles(const Json::Value& fileList,bool forceSync) {
                 allSuccess=false;
                 continue;
             }
-            std::string outputDir=std::filesystem::path(fullPath).parent_path().string();
+            std::string outputDir=std::filesystem::u8path(fullPath).parent_path().generic_u8string();
             fsHelper.EnsureDirectoryExists(outputDir);
 
-            if(std::filesystem::exists(fullPath)) {
+            if(std::filesystem::exists(std::filesystem::u8path(fullPath))) {
                 LOG_INFO("备份原有文件: {}", fullPath);
                 if(!fsHelper.BackupFile(fullPath)) {
                     LOG_WARN("警告: 文件备份失败，但继续更新...");

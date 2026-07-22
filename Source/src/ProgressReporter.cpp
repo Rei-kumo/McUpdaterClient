@@ -6,6 +6,7 @@
 void ProgressReporter::show(const std::string& operation,
     long long current,long long total) {
     std::lock_guard<std::mutex> lock(mtx_);
+    try {
 
     auto now=std::chrono::steady_clock::now();
     auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(now-lastUpdate_).count();
@@ -33,12 +34,15 @@ void ProgressReporter::show(const std::string& operation,
         float progress=(current<=0)?0.0f:static_cast<float>(current)/total;
         if(progress>1.0f) progress=1.0f;
         int pos=static_cast<int>(BAR_WIDTH*progress);
+        if(pos<0) pos=0;
+        if(pos>BAR_WIDTH) pos=BAR_WIDTH;
 
-        line<<'['
-            <<std::string(pos,'=')
-            <<'>'
-            <<std::string(BAR_WIDTH-pos-1,' ')
-            <<"] ";
+        line<<'[';
+        line<<std::string(pos,'=');
+        if(pos<BAR_WIDTH) {
+            line<<'>'<<std::string(BAR_WIDTH-pos-1,' ');
+        }
+        line<<']';
 
         line<<std::fixed<<std::setprecision(1)<<(progress*100.0f)<<"%  "
             <<FormatBytes(current)<<'/'<<FormatBytes(total);
@@ -52,6 +56,12 @@ void ProgressReporter::show(const std::string& operation,
     std::cout<<"\r"<<line.str();
     std::cout<<std::string(80-std::min<size_t>(80,line.str().size()),' ');
     std::cout.flush();
+    }
+    catch(...) {
+        // 回退输出
+        std::cout<<"\r"<<operation<<": "<<FormatBytes(current)<<"/"<<FormatBytes(total)<<"   ";
+        std::cout.flush();
+    }
 }
 
 void ProgressReporter::clear() {

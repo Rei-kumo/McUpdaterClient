@@ -31,7 +31,7 @@ bool ZipExtractor::ExtractZip(const std::vector<unsigned char>& zipData,const st
 
 	LOG_INFO("将ZIP数据写入临时文件: {}",tempZip);
 
-    std::ofstream tempFile(tempZip,std::ios::binary);
+    std::ofstream tempFile(std::filesystem::u8path(tempZip),std::ios::binary);
     if(!tempFile) {
         LOG_ERROR("无法创建临时ZIP文件: {}", tempZip);
         return false;
@@ -41,7 +41,7 @@ bool ZipExtractor::ExtractZip(const std::vector<unsigned char>& zipData,const st
     tempFile.close();
     bool result=ExtractZipFromFile(tempZip,extractPath);
     std::error_code ec;
-    std::filesystem::remove(tempZip,ec);
+    std::filesystem::remove(std::filesystem::u8path(tempZip),ec);
     if(ec) {
         LOG_WARN("无法删除临时文件: {} - {}", tempZip, ec.message());
     }
@@ -52,7 +52,7 @@ bool ZipExtractor::ExtractZipFromFile(const std::string& zipFilePath,const std::
     LOG_INFO("开始解压文件: {} 到 {}", zipFilePath, extractPath);
 
     std::error_code ec;
-    if(!std::filesystem::exists(zipFilePath,ec)) {
+    if(!std::filesystem::exists(std::filesystem::u8path(zipFilePath),ec)) {
         if(ec) {
             LOG_ERROR("检查ZIP文件存在性失败: {}", ec.message());
         }
@@ -62,7 +62,7 @@ bool ZipExtractor::ExtractZipFromFile(const std::string& zipFilePath,const std::
         return false;
     }
 
-    auto fileSize=std::filesystem::file_size(zipFilePath,ec);
+    auto fileSize=std::filesystem::file_size(std::filesystem::u8path(zipFilePath),ec);
     if(ec) {
         LOG_ERROR("无法获取ZIP文件大小: {}", ec.message());
         return false;
@@ -129,66 +129,43 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         if(!name) {
             name=zip_get_name(zip,i,0);
             if(!name) {
-                LOG_WARN("无法获取文件 {} 的文件名", i);
+                LOG_WARN("无法获取文件 {} 的文件名",i);
                 continue;
             }
         }
         std::string originalName=name;
         std::string safeName=originalName;
-        std::wstring wideName=fsHelper.Utf8ToWide(originalName);
-        if(wideName.empty()) {
-            LOG_WARN("无法转换文件名: {}", originalName);
-            safeName="file_"+std::to_string(i)+".dat";
-            LOG_INFO("使用替代文件名: {}", safeName);
-        }
-        std::string fullPath;
-        std::wstring wideExtractPath=fsHelper.Utf8ToWide(extractPath);
-        if(!wideExtractPath.empty()&&!wideName.empty()) {
-            std::wstring safeFullPath;
-            try {
-                safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
-            }
-            catch(const std::exception& e) {
-                LOG_ERROR("ZIP目录路径遍历被阻止: {} (条目: {})", e.what(), originalName);
-                continue;
-            }
-            fullPath=fsHelper.WideToUtf8(safeFullPath);
-            if(!wideName.empty()&&wideName.back()==L'/') {
-                try {
-                    std::filesystem::path dirPath=safeFullPath;
-                    std::filesystem::create_directories(dirPath);
 
-                    if(i%50==0) {
-                        LOG_DEBUG("创建目录: {}", originalName);
-                    }
-                }
-                catch(const std::exception& e) {
-                    LOG_WARN("无法创建目录 {}: {}", originalName, e.what());
-                }
-                continue;
-            }
+        // 如果文件名无效，使用替代文件名（保留原逻辑的安全处理，但不再依赖宽字符转换）
+        if(safeName.empty()) {
+            LOG_WARN("文件名为空，使用替代名");
+            safeName="file_"+std::to_string(i)+".dat";
+            LOG_INFO("使用替代文件名: {}",safeName);
         }
-        else {
-            try {
-                fullPath=FileSystemHelper::SecureCombine(extractPath,safeName);
-            }
-            catch(const std::exception& e) {
-				LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
-                continue;
-            }
+
+        std::string fullPath;
+        try {
+            fullPath=FileSystemHelper::SecureCombine(extractPath,safeName);
         }
+        catch(const std::exception& e) {
+            LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
+            continue;
+        }
+
+        // 判断是否是目录（zip 中目录以 '/' 结尾）
         if(!safeName.empty()&&safeName.back()=='/') {
             try {
-                std::filesystem::create_directories(fullPath);
+                std::filesystem::create_directories(std::filesystem::u8path(fullPath));
                 if(i%50==0) {
-                    LOG_DEBUG("创建目录: {}", originalName);
+                    LOG_DEBUG("创建目录: {}",originalName);
                 }
             }
             catch(const std::exception& e) {
-                LOG_WARN("无法创建目录 {}: {}", originalName, e.what());
+                LOG_WARN("无法创建目录 {}: {}",originalName,e.what());
             }
             continue;
         }
+
         fileEntries.push_back(originalName);
     }
 
@@ -206,7 +183,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
         if(index<0) {
             index=zip_name_locate(zip,originalName.c_str(),0);
             if(index<0) {
-                LOG_WARN("无法找到文件索引: {}", originalName);
+                LOG_WARN("无法找到文件索引: {}",originalName);
                 failedFiles++;
                 continue;
             }
@@ -214,7 +191,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
 
         zip_file_t* zfile=zip_fopen_index(zip,index,0);
         if(!zfile) {
-            LOG_WARN("无法打开文件: {}", originalName);
+            LOG_WARN("无法打开文件: {}",originalName);
             failedFiles++;
             continue;
         }
@@ -223,78 +200,65 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
             ~ZipFileCloser() { if(file) zip_fclose(file); }
         } closer{zfile};
 
-        std::string safeName=originalName;
-        std::string fullPath;
-        std::wstring wideExtractPath=fsHelper.Utf8ToWide(extractPath);
-        std::wstring wideName=fsHelper.Utf8ToWide(originalName);
-
-        if(!wideExtractPath.empty()&&!wideName.empty()) {
-            std::wstring safeFullPath;
-            try {
-                safeFullPath=FileSystemHelper::SecureCombineW(wideExtractPath,wideName);
-            }
-            catch(const std::exception& e) {
-				LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
-                failedFiles++;
-                unicodeFailedFiles++;
-                continue;
-            }
-            fullPath=fsHelper.WideToUtf8(safeFullPath);
-            std::filesystem::path filePath=safeFullPath;
-            std::filesystem::create_directories(filePath.parent_path());
-            FILE* outFile=_wfopen(safeFullPath.c_str(),L"wb");
-            if(outFile) {
-                zip_int64_t bytesRead;
-                long long totalBytes=0;
-                while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
-                    size_t written=fwrite(buffer.data(),1,(size_t)bytesRead,outFile);
-                    totalBytes+=bytesRead;
-                }
-
-                fclose(outFile);
-                extractedFiles++;
-            }
-            else {
-                DWORD error=GetLastError();
-                LOG_ERROR("无法创建文件: {} (错误码: {})", originalName, error);
-                failedFiles++;
-                unicodeFailedFiles++;
-                std::string asciiName="file_"+std::to_string(extractedFiles+failedFiles)+".dat";
-                std::string asciiFullPath;
-                try {
-                    asciiFullPath=FileSystemHelper::SecureCombine(extractPath,asciiName);
-                }
-                catch(const std::exception& e) {
-                    LOG_ERROR("ASCII后备路径遍历被阻止: {} (条目: {})", e.what(), originalName);
-                    failedFiles++;
-                    continue;
-                }
-
-                LOG_INFO("尝试使用ASCII名称: {}", asciiName);
-
-                std::ofstream asciiFile(asciiFullPath,std::ios::binary);
-                if(asciiFile) {
-                    zip_int64_t bytesRead;
-                    long long totalBytes=0;
-                    zip_fclose(zfile);
-                    zfile=zip_fopen_index(zip,index,0);
-
-                    if(zfile) {
-                        while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
-                            asciiFile.write(buffer.data(),bytesRead);
-                            totalBytes+=bytesRead;
-                        }
-                        asciiFile.close();
-                        extractedFiles++;
-                        LOG_INFO("文件 {} 保存为 {}", originalName, asciiName);
-                    }
-                }
-            }
+        std::string fullPath;   // 只声明一次
+        try {
+            fullPath=FileSystemHelper::SecureCombine(extractPath,originalName);
         }
-        else {
-            LOG_WARN("无法处理Unicode文件名: {}", originalName);
+        catch(const std::exception& e) {
+            LOG_ERROR("ZIP路径遍历被阻止: {} (条目: {})",e.what(),originalName);
             failedFiles++;
             unicodeFailedFiles++;
+            continue;
+        }
+
+        std::filesystem::path filePath=std::filesystem::u8path(fullPath);
+        std::filesystem::create_directories(filePath.parent_path());
+
+        FILE* outFile=_wfopen(filePath.wstring().c_str(),L"wb");
+        if(outFile) {
+            zip_int64_t bytesRead;
+            while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
+                fwrite(buffer.data(),1,(size_t)bytesRead,outFile);
+            }
+            fclose(outFile);
+            extractedFiles++;
+        }
+        else {
+            DWORD error=GetLastError();
+            LOG_ERROR("无法创建文件: {} (错误码: {})",originalName,error);
+            failedFiles++;
+            unicodeFailedFiles++;
+
+            // ASCII 后备逻辑保持不变
+            std::string asciiName="file_"+std::to_string(extractedFiles+failedFiles)+".dat";
+            std::string asciiFullPath;
+            try {
+                asciiFullPath=FileSystemHelper::SecureCombine(extractPath,asciiName);
+            }
+            catch(const std::exception& e) {
+                LOG_ERROR("ASCII后备路径遍历被阻止: {} (条目: {})",e.what(),originalName);
+                failedFiles++;
+                continue;
+            }
+
+            LOG_INFO("尝试使用ASCII名称: {}",asciiName);
+
+            std::ofstream asciiFile(std::filesystem::u8path(asciiFullPath),std::ios::binary);
+            if(asciiFile) {
+                zip_int64_t bytesRead;
+                long long totalBytes=0;
+                zip_fclose(zfile);
+                zfile=zip_fopen_index(zip,index,0);
+                if(zfile) {
+                    while((bytesRead=zip_fread(zfile,buffer.data(),bufferSize))>0) {
+                        asciiFile.write(buffer.data(),bytesRead);
+                        totalBytes+=bytesRead;
+                    }
+                    asciiFile.close();
+                    extractedFiles++;
+                    LOG_INFO("文件 {} 保存为 {}",originalName,asciiName);
+                }
+            }
         }
         zip_fclose(zfile);
         if((extractedFiles+failedFiles)%100==0) {
@@ -329,7 +293,7 @@ bool ZipExtractor::ExtractZipOriginal(const std::string& zipFilePath,const std::
     return extractedFiles>0;
 }
 bool ZipExtractor::IsValidZipFile(const std::string& filePath) {
-    std::ifstream file(filePath,std::ios::binary);
+    std::ifstream file(std::filesystem::u8path(filePath),std::ios::binary);
     if(!file) {
         LOG_DEBUG("无法打开文件: {}", filePath);
         return false;
@@ -400,8 +364,8 @@ bool ZipExtractor::CheckServerResponse(const std::string& url) {
         }
 
         std::error_code ec;
-        auto fileSize=std::filesystem::file_size(tempFile,ec);
-        std::filesystem::remove(tempFile);
+        auto fileSize=std::filesystem::file_size(std::filesystem::u8path(tempFile),ec);
+        std::filesystem::remove(std::filesystem::u8path(tempFile));
 
         if(ec||fileSize==0) {
             LOG_DEBUG("服务器返回空文件或错误");
@@ -443,16 +407,16 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
         return false;
     }
     std::error_code ec;
-    auto fileSize=std::filesystem::file_size(tempZip,ec);
+    auto fileSize=std::filesystem::file_size(std::filesystem::u8path(tempZip),ec);
     if(ec) {
         LOG_ERROR("无法获取文件大小: {}", ec.message());
-        std::filesystem::remove(tempZip);
+        std::filesystem::remove(std::filesystem::u8path(tempZip));
         return false;
     }
 
     LOG_INFO("下载完成，文件大小: {}", pRepoter.FormatBytes(fileSize));
     if(fileSize<1024) {
-        std::ifstream file(tempZip,std::ios::binary);
+        std::ifstream file(std::filesystem::u8path(tempZip),std::ios::binary);
         if(file) {
             std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
             file.close();
@@ -462,19 +426,19 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
 
                 LOG_INFO("服务器返回错误页面，可能是空文件夹，将创建空目录");
                 LOG_DEBUG("服务器响应: {}", content);
-                std::filesystem::remove(tempZip);
+                std::filesystem::remove(std::filesystem::u8path(tempZip));
                 std::string extractPath;
                 try {
                     extractPath=FileSystemHelper::SecureCombine(targetBaseDir,relativePath);
                 }
                 catch(const std::exception& e) {
                     LOG_ERROR("下载并解压中的路径遍历被阻止: {}", e.what());
-                    std::filesystem::remove(tempZip);
+                    std::filesystem::remove(std::filesystem::u8path(tempZip));
                     return false;
                 }
                 try {
-                    if(!std::filesystem::exists(extractPath)) {
-                        std::filesystem::create_directories(extractPath);
+                    if(!std::filesystem::exists(std::filesystem::u8path(extractPath))) {
+                        std::filesystem::create_directories(std::filesystem::u8path(extractPath));
                         LOG_INFO("已创建空目录: {}", extractPath);
                     }
                     else {
@@ -492,7 +456,7 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
     if(!IsValidZipFile(tempZip)) {
         LOG_ERROR("下载的文件不是有效的ZIP文件，大小: {}", pRepoter.FormatBytes(fileSize));
         if(fileSize<1024) {
-            std::ifstream file(tempZip,std::ios::binary);
+            std::ifstream file(std::filesystem::u8path(tempZip),std::ios::binary);
             if(file) {
                 std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
                 LOG_DEBUG("文件内容: {}", content);
@@ -500,7 +464,7 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
             file.close();
         }
 
-        std::filesystem::remove(tempZip);
+        std::filesystem::remove(std::filesystem::u8path(tempZip));
         return false;
     }
     std::string extractPath;
@@ -511,12 +475,12 @@ bool ZipExtractor::DownloadAndExtract(const std::string& url,const std::string& 
 		LOG_ERROR("路径遍历被阻止: {}",e.what());
         return false;
     }
-    if(std::filesystem::exists(extractPath)) {
+    if(std::filesystem::exists(std::filesystem::u8path(extractPath))) {
         LOG_INFO("备份原有目录...");
         fsHelper.BackupFile(extractPath);
     }
     bool extractSuccess=ExtractZipOriginal(tempZip,extractPath);
-    std::filesystem::remove(tempZip);
+    std::filesystem::remove(std::filesystem::u8path(tempZip));
 
     if(!extractSuccess) {
         LOG_ERROR("解压失败");
